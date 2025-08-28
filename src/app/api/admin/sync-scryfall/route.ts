@@ -1,4 +1,3 @@
-
 import { NextResponse, NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
@@ -62,38 +61,33 @@ async function fetchAllCards() {
     if (!res.ok) throw new Error(`Scryfall error ${res.status}`)
     const data = await res.json()
     all.push(...(data.data as ScryCard[]))
-    if (data.has_more && data.next_page) {
-      url = data.next_page
-    } else break
+    if (data.has_more && data.next_page) url = data.next_page
+    else break
   }
   return all
 }
 
 export async function GET(req: NextRequest) {
-  // --- Admin guard ---
   const key = req.headers.get('x-admin-key') || new URL(req.url).searchParams.get('key') || ''
-  if (!ADMIN_KEY || key !== ADMIN_KEY) {
-    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
-  }
+  if (!ADMIN_KEY || key !== ADMIN_KEY) return NextResponse.json({ ok:false, error:'Unauthorized' }, { status:401 })
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return NextResponse.json({ ok: false, error: 'Missing Supabase env (URL or SERVICE_ROLE_KEY)' }, { status: 500 })
-  }
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return NextResponse.json({ ok:false, error:'Missing Supabase env' }, { status:500 })
   const supa = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 
   try {
     const scry = await fetchAllCards()
     let upserts = 0
-    const chunkSize = 200
-    for (let i=0;i<scry.length;i+=chunkSize) {
-      const slice = scry.slice(i, i+chunkSize).map(toRow)
+    const chunk = 200
+    for (let i=0;i<scry.length;i+=chunk) {
+      const slice = scry.slice(i, i+chunk).map(toRow)
       const { error } = await supa.from('cards').upsert(slice, { onConflict: 'scryfall_id' })
       if (error) throw error
       upserts += slice.length
     }
-    return NextResponse.json({ ok: true, upserts })
-  } catch (e: any) {
-    console.error(e)
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 })
+    await supa.from('admin_logs').insert({ action: 'sync', message: `Sync completata: ${upserts} carte` })
+    return NextResponse.json({ ok:true, upserts })
+  } catch (e:any) {
+    await supa.from('admin_logs').insert({ action: 'sync_error', message: String(e) })
+    return NextResponse.json({ ok:false, error:String(e) }, { status:500 })
   }
 }
