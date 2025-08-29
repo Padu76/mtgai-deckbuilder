@@ -1,4 +1,341 @@
+/* src/app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-body{color-scheme:dark;background:#0b0f19;color:#e5e7eb;}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(31, 41, 55);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(75, 85, 99);
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(107, 114, 128);
+}
+
+/* Firefox scrollbar */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(75, 85, 99) rgb(31, 41, 55);
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Focus styles */
+*:focus {
+  outline: none;
+}
+
+.focus-ring {
+  @apply focus:ring-2 focus:ring-orange-500 focus:ring-opacity-50;
+}
+
+/* Input range slider */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  background: rgb(55, 65, 81);
+  border-radius: 4px;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: rgb(234, 88, 12);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: all 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  background: rgb(251, 146, 60);
+  transform: scale(1.1);
+}
+
+input[type="range"]::-moz-range-thumb {
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: rgb(234, 88, 12);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: all 0.15s ease;
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+  background: rgb(251, 146, 60);
+  transform: scale(1.1);
+}
+
+/* Custom components */
+.card-hover {
+  @apply transition-all duration-200 hover:scale-105 hover:shadow-xl;
+}
+
+.glass-effect {
+  backdrop-filter: blur(12px);
+  background: rgba(31, 41, 55, 0.8);
+  border: 1px solid rgba(75, 85, 99, 0.3);
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, rgb(234, 88, 12), rgb(239, 68, 68));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-bg {
+  background: linear-gradient(135deg, rgb(234, 88, 12), rgb(239, 68, 68));
+}
+
+/* Animation keyframes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  animation: shimmer 1.5s linear infinite;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.1) 20%,
+    rgba(255, 255, 255, 0.5) 60%,
+    rgba(255, 255, 255, 0)
+  );
+  background-size: 200px 100%;
+}
+
+/* Utility classes */
+.text-shadow {
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.text-shadow-lg {
+  text-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* Button variations */
+.btn-primary {
+  @apply bg-orange-600 hover:bg-orange-500 text-white font-medium px-4 py-2 rounded-lg transition-colors focus:ring-2 focus:ring-orange-500 focus:ring-opacity-50;
+}
+
+.btn-secondary {
+  @apply bg-gray-700 hover:bg-gray-600 text-white font-medium px-4 py-2 rounded-lg transition-colors border border-gray-600 hover:border-gray-500;
+}
+
+.btn-ghost {
+  @apply bg-transparent hover:bg-gray-800 text-gray-300 hover:text-white font-medium px-4 py-2 rounded-lg transition-all border border-transparent hover:border-gray-600;
+}
+
+.btn-danger {
+  @apply bg-red-600 hover:bg-red-500 text-white font-medium px-4 py-2 rounded-lg transition-colors focus:ring-2 focus:ring-red-500 focus:ring-opacity-50;
+}
+
+/* Input styles */
+.input-primary {
+  @apply bg-gray-800 border border-gray-600 text-white rounded-lg px-3 py-2 focus:border-orange-500 focus:ring-2 focus:ring-orange-500 focus:ring-opacity-50 transition-colors;
+}
+
+.input-primary::placeholder {
+  @apply text-gray-400;
+}
+
+/* Card styles */
+.card {
+  @apply bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-gray-600 transition-colors;
+}
+
+.card-interactive {
+  @apply card hover:scale-105 hover:shadow-xl cursor-pointer transition-all duration-200;
+}
+
+/* Loading states */
+.skeleton {
+  @apply bg-gray-700 rounded animate-pulse;
+}
+
+.skeleton-text {
+  @apply skeleton h-4 mb-2;
+}
+
+.skeleton-title {
+  @apply skeleton h-6 mb-3;
+}
+
+.skeleton-avatar {
+  @apply skeleton w-12 h-12 rounded-full;
+}
+
+/* Badge styles */
+.badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.badge-primary {
+  @apply badge bg-orange-600 text-orange-100;
+}
+
+.badge-secondary {
+  @apply badge bg-gray-600 text-gray-100;
+}
+
+.badge-success {
+  @apply badge bg-green-600 text-green-100;
+}
+
+.badge-danger {
+  @apply badge bg-red-600 text-red-100;
+}
+
+.badge-warning {
+  @apply badge bg-yellow-600 text-yellow-100;
+}
+
+/* Toast notifications */
+.toast {
+  @apply bg-gray-800 border border-gray-600 rounded-lg p-4 shadow-lg max-w-sm;
+}
+
+.toast-success {
+  @apply toast border-green-500;
+}
+
+.toast-error {
+  @apply toast border-red-500;
+}
+
+.toast-warning {
+  @apply toast border-yellow-500;
+}
+
+.toast-info {
+  @apply toast border-blue-500;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .mobile-full {
+    @apply w-full;
+  }
+  
+  .mobile-p-4 {
+    @apply p-4;
+  }
+  
+  .mobile-text-sm {
+    @apply text-sm;
+  }
+  
+  .mobile-grid-1 {
+    @apply grid-cols-1;
+  }
+  
+  .mobile-space-y-4 {
+    @apply space-y-4;
+  }
+}
+
+/* Dark mode improvements */
+@media (prefers-color-scheme: dark) {
+  html {
+    color-scheme: dark;
+  }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .card {
+    @apply border-white;
+  }
+  
+  .btn-primary {
+    @apply bg-white text-black;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}
+
+/* Selection colors */
+::selection {
+  background: rgba(234, 88, 12, 0.3);
+  color: white;
+}
+
+::-moz-selection {
+  background: rgba(234, 88, 12, 0.3);
+  color: white;
+}
