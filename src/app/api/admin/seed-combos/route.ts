@@ -1,5 +1,5 @@
 // src/app/api/admin/seed-combos/route.ts
-// API endpoint per seeding completo del database combo - versione estesa
+// API endpoint per seeding completo del database combo - UUID FIXATO
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
@@ -13,6 +13,15 @@ const config = {
   admin: {
     key: process.env.NEXT_PUBLIC_ADMIN_KEY!
   }
+}
+
+// Funzione per generare UUID validi
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 // Database completo con 50+ combo famose categorizzate
@@ -410,17 +419,19 @@ const FAMOUS_COMBOS = [
   }
 ]
 
+interface SeedingStats {
+  combos_created: number
+  cards_created: number
+  relationships_created: number
+  total_combos: number
+  total_cards: number
+  total_relationships: number
+}
+
 interface SeedingResult {
   success: boolean
   message: string
-  stats?: {
-    combos_created: number
-    cards_created: number
-    relationships_created: number
-    total_combos: number
-    total_cards: number
-    total_relationships: number
-  }
+  stats?: SeedingStats
   errors?: string[]
   log?: string[]
 }
@@ -473,7 +484,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SeedingRe
       log.push('Existing combos cleaned successfully')
     }
 
-    // Seed combos with proper error handling
+    // Seed combos with proper error handling e UUID CORRETTI
     let combosCreated = 0
     let cardsCreated = 0
     let relationshipsCreated = 0
@@ -482,14 +493,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<SeedingRe
       const combo = FAMOUS_COMBOS[i]
       
       try {
-        // Create combo record
-        const comboId = `combo_${i.toString().padStart(3, '0')}`
+        // Create combo record con UUID VALIDO
+        const comboId = generateUUID()
         
         const { error: comboError } = await supabase
           .from('combos')
           .insert({
             id: comboId,
-            source: 'manual_curated_v2',
+            source: 'manual_curated_v3',
             name: combo.name,
             result_tag: combo.result_tag,
             color_identity: combo.color_identity,
@@ -503,6 +514,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SeedingRe
         }
 
         combosCreated++
+        log.push(`✓ Combo inserted: ${combo.name}`)
 
         // Process each card in the combo
         const cardIds: string[] = []
@@ -529,18 +541,21 @@ export async function POST(request: NextRequest): Promise<NextResponse<SeedingRe
             errors.push(`Error creating relationships for ${combo.name}: ${relationshipError.message}`)
           } else {
             relationshipsCreated += cardIds.length
-            log.push(`✅ ${combo.name} (${cardIds.length} cards) - Category: ${combo.category}`)
+            log.push(`✓ ${combo.name} linked with ${cardIds.length} cards - Category: ${combo.category}`)
           }
+        } else {
+          log.push(`⚠ ${combo.name} has no valid cards linked`)
         }
 
-        // Rate limiting every 20 combos
-        if (i > 0 && i % 20 === 0) {
-          log.push(`⏳ Processed ${i + 1}/${FAMOUS_COMBOS.length} combos...`)
-          await new Promise(resolve => setTimeout(resolve, 1000))
+        // Rate limiting every 15 combos
+        if (i > 0 && i % 15 === 0) {
+          log.push(`⏳ Progress: ${i + 1}/${FAMOUS_COMBOS.length} combos processed...`)
+          await new Promise(resolve => setTimeout(resolve, 800))
         }
 
       } catch (error) {
         errors.push(`Unexpected error with combo ${combo.name}: ${(error as Error).message}`)
+        log.push(`❌ Failed processing: ${combo.name}`)
       }
     }
 
@@ -557,6 +572,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SeedingRe
     log.push(`  • ${comboCount.count || 0} total combos in database`)
     log.push(`  • ${cardCount.count || 0} total cards in database`)
     log.push(`  • ${relationshipCount.count || 0} total card relationships`)
+    log.push(`Categories seeded: infinite_damage, infinite_mana, infinite_tokens, storm_combo, aggro_combo, and more`)
 
     return NextResponse.json({
       success: true,
@@ -611,14 +627,15 @@ async function findOrCreateCard(
       return existingCards[0].id
     }
 
-    // Card doesn't exist, create enhanced placeholder
+    // Card doesn't exist, create enhanced placeholder con UUID VALIDO
+    const cardId = generateUUID()
     const timestamp = Date.now()
-    const randomId = Math.random().toString(36).substr(2, 9)
     
     const { data: newCard, error: insertError } = await supabase
       .from('cards')
       .insert({
-        scryfall_id: `placeholder_${timestamp}_${randomId}`,
+        id: cardId,
+        scryfall_id: `placeholder_${timestamp}_${cardName.replace(/[^a-zA-Z0-9]/g, '_')}`,
         name: cardName,
         mana_value: estimateManaCost(cardName),
         colors: estimateColors(cardName, comboColors),
@@ -640,7 +657,8 @@ async function findOrCreateCard(
     }
 
     log.push(`🔍 Created placeholder: ${cardName}`)
-    return newCard.id
+    cardsCreated++
+    return cardId
 
   } catch (error) {
     log.push(`❌ Unexpected error finding/creating card ${cardName}: ${(error as Error).message}`)
