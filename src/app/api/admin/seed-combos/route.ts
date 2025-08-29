@@ -3,7 +3,17 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { config } from '@/lib/config'
+
+// Configurazione inline per evitare dipendenze da @/lib/config
+const config = {
+  supabase: {
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY!
+  },
+  admin: {
+    key: process.env.NEXT_PUBLIC_ADMIN_KEY!
+  }
+}
 
 // Database completo con 50+ combo famose categorizzate
 const FAMOUS_COMBOS = [
