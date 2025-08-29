@@ -50,12 +50,20 @@ export async function POST(request: NextRequest) {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-    // Get cards with null safety
-    const { data: cards, error } = await supabase
+    // Get cards with format filtering
+    let query = supabase
       .from('cards')
       .select('*')
       .not('oracle_text', 'is', null)
-      .limit(1000)
+
+    // Add format filtering
+    if (format === 'standard') {
+      query = query.eq('legal_standard', true)
+    } else if (format === 'historic' || format === 'brawl') {
+      query = query.eq('legal_historic', true)
+    }
+
+    const { data: cards, error } = await query.limit(2000)
 
     if (error) {
       console.error('Database error:', error)
@@ -67,14 +75,14 @@ export async function POST(request: NextRequest) {
 
     if (!cards || cards.length === 0) {
       return NextResponse.json({ 
-        error: 'No cards found in database',
+        error: 'No cards found in database for this format',
         ok: false 
       }, { status: 404 })
     }
 
-    console.log(`Analyzing ${cards.length} cards for combo potential...`)
+    console.log(`Found ${cards.length} cards in ${format} format`)
 
-    // Safe card filtering with null checks
+    // FIXED: Strict color filtering - only cards that have EXACTLY the selected colors or subset
     const validCards = cards.filter(card => {
       try {
         // Ensure required fields exist and are valid
@@ -83,41 +91,32 @@ export async function POST(request: NextRequest) {
         if (!Array.isArray(card.color_identity)) return false
         if (!Array.isArray(card.types)) return false
         
-        // Check if card matches selected colors (empty color_identity = colorless is ok)
+        // FIXED: Strict color identity matching
         const cardColors = card.color_identity || []
-        return cardColors.length === 0 || cardColors.some((color: string) => colors.includes(color))
+        
+        // Colorless cards (no color identity) are always allowed
+        if (cardColors.length === 0) return true
+        
+        // Card must have ONLY colors that are in our selected colors
+        return cardColors.every((color: string) => colors.includes(color))
       } catch (e) {
         console.warn(`Card validation error for card ${card.id}:`, e)
         return false
       }
     })
 
-    console.log(`Filtered to ${validCards.length} valid cards`)
+    console.log(`Filtered to ${validCards.length} valid cards matching colors ${colors.join(', ')}`)
 
-    // AI analysis with fallback patterns
-    let combos: ComboPattern[] = []
-    
-    try {
-      // Try AI analysis first if API key is available
-      if (process.env.ANTHROPIC_API_KEY) {
-        combos = await analyzeWithAI(validCards, colors)
-      }
-    } catch (aiError) {
-      console.warn('AI analysis failed, using fallback patterns:', aiError)
-    }
-
-    // Fallback to pattern-based analysis if AI fails or no API key
-    if (combos.length === 0) {
-      combos = await analyzeWithPatterns(validCards, colors)
-    }
+    // Generate combos using pattern matching
+    const combos = await analyzeWithPatterns(validCards, colors, format)
 
     // Limit results
-    combos = combos.slice(0, max_combos)
+    const finalCombos = combos.slice(0, max_combos)
 
-    console.log(`Found ${combos.length} combo suggestions`)
+    console.log(`Found ${finalCombos.length} combo suggestions`)
 
     // Safe categorization
-    const categories = combos.reduce((acc: any, combo) => {
+    const categories = finalCombos.reduce((acc: any, combo) => {
       const category = combo.category || 'unknown'
       acc[category] = (acc[category] || 0) + 1
       return acc
@@ -125,7 +124,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      combos,
+      combos: finalCombos,
       categories,
       total_cards_analyzed: validCards.length,
       colors_requested: colors,
@@ -133,7 +132,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error: any) {
-    console.error('Error with AI analysis:', error)
+    console.error('Error with combo analysis:', error)
     return NextResponse.json({ 
       error: 'Analysis failed: ' + (error.message || 'Unknown error'),
       ok: false 
@@ -141,68 +140,28 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function analyzeWithAI(cards: Card[], colors: string[]): Promise<ComboPattern[]> {
-  // AI analysis implementation (requires ANTHROPIC_API_KEY)
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': process.env.ANTHROPIC_API_KEY!
-    },
-    body: JSON.stringify({
-      model: 'claude-3-sonnet-20240229',
-      max_tokens: 4000,
-      messages: [{
-        role: 'user',
-        content: `Analyze these MTG cards for combo potential. Colors: ${colors.join(',')}.
-        Find synergistic combinations focusing on: infinite combos, value engines, win conditions.
-        Cards sample: ${cards.slice(0, 50).map(c => `${c.name}: ${c.oracle_text?.slice(0, 100)}`).join('\n')}
-        
-        Return JSON array of combos with this structure:
-        [{"id": "combo1", "category": "infinite_tokens", "description": "...", "cards": [...], "steps": [...], "reliability": "high", "setup_turns": 3, "mana_cost_total": 6, "power_level": 8}]`
-      }]
-    })
-  })
-
-  if (!response.ok) {
-    throw new Error(`AI API error: ${response.status}`)
-  }
-
-  const data = await response.json()
-  const content = data.content?.[0]?.text || ''
-  
-  try {
-    const jsonMatch = content.match(/\[[\s\S]*\]/)
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0])
-    }
-  } catch (e) {
-    console.warn('Failed to parse AI response as JSON')
-  }
-  
-  return []
-}
-
-async function analyzeWithPatterns(cards: Card[], colors: string[]): Promise<ComboPattern[]> {
+async function analyzeWithPatterns(cards: Card[], colors: string[], format: string): Promise<ComboPattern[]> {
   const combos: ComboPattern[] = []
   
-  // Define combo patterns with null safety
+  // Enhanced combo patterns for better detection
   const patterns = [
     {
       id: 'poison_proliferate',
       category: 'poison',
       keywords: ['poison', 'toxic', 'proliferate'],
       description: 'Combo Veleno + Proliferate',
-      power_level: 7,
-      setup_turns: 4
+      power_level: 8,
+      setup_turns: 3,
+      priority: 1
     },
     {
       id: 'infinite_tokens',
       category: 'infinite_tokens', 
-      keywords: ['create', 'token', 'copy', 'populate'],
+      keywords: ['create', 'token', 'copy', 'populate', 'double'],
       description: 'Generazione Infinita Pedine',
       power_level: 8,
-      setup_turns: 5
+      setup_turns: 4,
+      priority: 1
     },
     {
       id: 'infinite_mana',
@@ -210,37 +169,94 @@ async function analyzeWithPatterns(cards: Card[], colors: string[]): Promise<Com
       keywords: ['add', 'mana', 'untap', 'cost reduction'],
       description: 'Generazione Mana Infinito',
       power_level: 9,
-      setup_turns: 3
+      setup_turns: 3,
+      priority: 1
+    },
+    {
+      id: 'infinite_damage',
+      category: 'infinite_damage',
+      keywords: ['damage', 'ping', 'bolt', 'shock', 'untap'],
+      description: 'Danno Infinito Diretto',
+      power_level: 8,
+      setup_turns: 4,
+      priority: 1
     },
     {
       id: 'sacrifice_synergy',
       category: 'value_engine',
-      keywords: ['sacrifice', 'death', 'enters', 'leaves'],
-      description: 'Sinergie Sacrifice/Death Trigger',
+      keywords: ['sacrifice', 'death', 'enters', 'leaves', 'dies'],
+      description: 'Engine Sacrifice/Death Trigger',
       power_level: 6,
-      setup_turns: 3
+      setup_turns: 3,
+      priority: 2
     },
     {
       id: 'draw_mill',
-      category: 'draw_damage',
-      keywords: ['draw', 'mill', 'library', 'graveyard'],
+      category: 'mill',
+      keywords: ['mill', 'library', 'graveyard', 'cards into graveyard'],
       description: 'Mill + Punishment Engine',
       power_level: 6,
-      setup_turns: 4
+      setup_turns: 4,
+      priority: 2
+    },
+    {
+      id: 'flicker_etb',
+      category: 'flicker',
+      keywords: ['exile', 'return', 'enters the battlefield', 'flicker'],
+      description: 'Flicker/ETB Value Engine',
+      power_level: 6,
+      setup_turns: 3,
+      priority: 2
+    },
+    {
+      id: 'ramp_big',
+      category: 'ramp',
+      keywords: ['search', 'land', 'mana', 'ramp'],
+      description: 'Accelerazione Mana',
+      power_level: 5,
+      setup_turns: 2,
+      priority: 3
     }
   ]
 
-  // Safe pattern matching
+  // Find combos by pattern matching with strict color adherence
   for (const pattern of patterns) {
     try {
       const matchingCards = cards.filter(card => {
         if (!card.oracle_text) return false
         const text = card.oracle_text.toLowerCase()
-        return pattern.keywords.some(keyword => text.includes(keyword.toLowerCase()))
-      }).slice(0, 4) // Limit cards per combo
+        
+        // Must match at least one keyword
+        const hasKeyword = pattern.keywords.some(keyword => 
+          text.includes(keyword.toLowerCase())
+        )
+        
+        if (!hasKeyword) return false
+        
+        // FIXED: Ensure card colors strictly match our selection
+        const cardColors = card.color_identity || []
+        return cardColors.length === 0 || cardColors.every(color => colors.includes(color))
+      })
+      
+      // Sort by relevance and mana cost
+      .sort((a, b) => {
+        // First by keyword matches (more matches = higher relevance)
+        const aMatches = pattern.keywords.filter(keyword => 
+          (a.oracle_text || '').toLowerCase().includes(keyword.toLowerCase())
+        ).length
+        const bMatches = pattern.keywords.filter(keyword => 
+          (b.oracle_text || '').toLowerCase().includes(keyword.toLowerCase())
+        ).length
+        
+        if (aMatches !== bMatches) return bMatches - aMatches
+        
+        // Then by mana cost (lower is better for combos)
+        return (a.mana_value || 0) - (b.mana_value || 0)
+      })
+      .slice(0, format === 'brawl' ? 4 : 3) // Limit cards per combo
 
       if (matchingCards.length >= 2) {
-        // Safe card processing
+        // FIXED: Process cards with proper validation
         const processedCards = matchingCards.map(card => ({
           id: card.id || '',
           name: card.name || 'Unknown Card',
@@ -260,21 +276,20 @@ async function analyzeWithPatterns(cards: Card[], colors: string[]): Promise<Com
         const totalManaCost = processedCards.reduce((sum, card) => 
           sum + (card.mana_value || 0), 0)
 
+        // Generate more specific steps based on pattern
+        const steps = generateComboSteps(pattern, processedCards)
+
         combos.push({
-          id: `${pattern.id}_${Date.now()}`,
+          id: `${pattern.id}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
           cards: processedCards,
           category: pattern.category,
-          type: 'synergy',
+          type: pattern.priority === 1 ? 'infinite' : 'synergy',
           description: pattern.description,
-          steps: [
-            `Deploy ${processedCards[0]?.name || 'first card'}`,
-            `Set up ${processedCards[1]?.name || 'second card'}`,
-            `Execute combo for advantage`
-          ],
-          reliability: totalManaCost <= 6 ? 'high' : 'medium',
+          steps: steps,
+          reliability: totalManaCost <= 4 ? 'high' : totalManaCost <= 7 ? 'medium' : 'low',
           setup_turns: pattern.setup_turns,
           mana_cost_total: totalManaCost,
-          power_level: pattern.power_level
+          power_level: Math.max(1, pattern.power_level - Math.floor(totalManaCost / 3))
         })
       }
     } catch (patternError) {
@@ -283,40 +298,101 @@ async function analyzeWithPatterns(cards: Card[], colors: string[]): Promise<Com
     }
   }
 
-  // Ensure we return at least some combos
-  if (combos.length === 0) {
-    // Generate a basic combo from any available cards
-    const sampleCards = cards.slice(0, 3).map(card => ({
-      id: card.id || '',
-      name: card.name || 'Unknown Card',
-      mana_cost: card.mana_cost || '',
-      mana_value: card.mana_value || 0,
-      colors: Array.isArray(card.colors) ? card.colors : [],
-      color_identity: Array.isArray(card.color_identity) ? card.color_identity : [],
-      oracle_text: card.oracle_text || '',
-      rarity: card.rarity || 'common',
-      types: Array.isArray(card.types) ? card.types : [],
-      power: card.power || null,
-      toughness: card.toughness || null,
-      set_code: card.set_code || null,
-      image_url: card.image_url || null
-    }))
+  // Sort combos by power level (highest first)
+  combos.sort((a, b) => b.power_level - a.power_level)
 
-    if (sampleCards.length >= 2) {
-      combos.push({
-        id: 'basic_synergy',
-        cards: sampleCards,
-        category: 'value_engine',
-        type: 'synergy',
-        description: `Sinergia Base ${colors.join('-')}`,
-        steps: ['Deploy creatures', 'Build board presence', 'Apply pressure'],
-        reliability: 'medium',
-        setup_turns: 4,
-        mana_cost_total: 8,
-        power_level: 5
-      })
-    }
+  // Ensure minimum variety - if too few combos, generate basic synergies
+  if (combos.length < 3) {
+    const additionalCombos = generateBasicSynergies(cards, colors, format, 5 - combos.length)
+    combos.push(...additionalCombos)
   }
 
   return combos
+}
+
+function generateComboSteps(pattern: any, cards: Card[]): string[] {
+  const card1 = cards[0]?.name || 'Prima carta'
+  const card2 = cards[1]?.name || 'Seconda carta'
+  const card3 = cards[2]?.name || 'Terza carta'
+
+  switch (pattern.category) {
+    case 'poison':
+      return [
+        `Gioca ${card1} per iniziare a dare poison counter`,
+        `Attiva ${card2} per proliferare i counter`,
+        `Ripeti il processo fino a 10 poison counter per la vittoria`
+      ]
+    case 'infinite_tokens':
+      return [
+        `Metti in campo ${card1} per creare la prima pedina`,
+        `Usa ${card2} per copiare/duplicare le pedine`,
+        `Continua il loop per pedine infinite`
+      ]
+    case 'infinite_mana':
+      return [
+        `Gioca ${card1} per generare mana`,
+        `Usa ${card2} per stappare e ripetere`,
+        `Mana infinito disponibile per combo devastanti`
+      ]
+    case 'infinite_damage':
+      return [
+        `Metti ${card1} per la fonte di danno`,
+        `Combina con ${card2} per ripetere infinite volte`,
+        `Infliggi danno letale all'avversario`
+      ]
+    default:
+      return [
+        `Stabilisci ${card1} per la base della combo`,
+        `Attiva ${card2} per il vantaggio`,
+        `Sfrutta la sinergia per dominare il gioco`
+      ]
+  }
+}
+
+function generateBasicSynergies(cards: Card[], colors: string[], format: string, count: number): ComboPattern[] {
+  const synergies: ComboPattern[] = []
+  
+  // Group cards by type for basic synergies
+  const creatures = cards.filter(c => c.types?.includes('Creature') && c.mana_value && c.mana_value <= 6)
+  const spells = cards.filter(c => c.types?.some(t => ['Instant', 'Sorcery'].includes(t)))
+  
+  if (creatures.length >= 2) {
+    for (let i = 0; i < Math.min(count, 3); i++) {
+      const selectedCards = creatures.slice(i * 2, i * 2 + 2)
+      if (selectedCards.length === 2) {
+        synergies.push({
+          id: `basic_creature_synergy_${i}`,
+          cards: selectedCards.map(card => ({
+            id: card.id || '',
+            name: card.name || '',
+            mana_cost: card.mana_cost || '',
+            mana_value: card.mana_value || 0,
+            colors: card.colors || [],
+            color_identity: card.color_identity || [],
+            oracle_text: card.oracle_text || '',
+            rarity: card.rarity || 'common',
+            types: card.types || [],
+            power: card.power,
+            toughness: card.toughness,
+            set_code: card.set_code,
+            image_url: card.image_url
+          })),
+          category: 'creature_synergy',
+          type: 'synergy',
+          description: `Sinergia Creature ${colors.join('-')}`,
+          steps: [
+            `Gioca ${selectedCards[0].name} per pressione early game`,
+            `Segui con ${selectedCards[1].name} per raddoppiare la minaccia`,
+            `Mantieni pressione costante sull'avversario`
+          ],
+          reliability: 'medium',
+          setup_turns: 3,
+          mana_cost_total: selectedCards.reduce((sum, c) => sum + (c.mana_value || 0), 0),
+          power_level: 5
+        })
+      }
+    }
+  }
+
+  return synergies
 }
