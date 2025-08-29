@@ -129,7 +129,7 @@ async function buildOptimalDeckList(
       })
       .slice(0, category.count)
 
-    categoryCards.forEach(card => {
+    categoryCards.forEach((card: Card) => {
       if (deckList.length < (format === 'brawl' ? 99 : 60)) {
         const quantity = format === 'brawl' ? 1 : Math.min(4, category.name === 'removal' ? 3 : 2)
         deckList.push({
