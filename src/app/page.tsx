@@ -1,4 +1,4 @@
-// src/app/page.tsx
+// src/app/page.tsx - Homepage con New Sets Analysis sostituita ad Analisi Meta
 'use client'
 
 import { useState } from 'react'
@@ -59,14 +59,14 @@ export default function HomePage() {
       available: true
     },
     {
-      id: 'meta-analysis',
-      icon: '📊',
-      title: 'Analisi Meta',
-      subtitle: 'Studia tendenze',
-      description: 'Analizza il metagame corrente e scopri quali combo dominano la scena competitiva.',
-      link: '/meta-analysis',
-      gradient: 'from-indigo-500 to-purple-400',
-      available: false
+      id: 'new-sets-analysis',
+      icon: '🔥',
+      title: 'Combo Nuove',
+      subtitle: 'Ultime espansioni',
+      description: 'Scopri combo innovative dalle ultime espansioni e come si combinano con carte esistenti.',
+      link: '/new-sets-combos',
+      gradient: 'from-red-500 to-orange-400',
+      available: true
     }
   ]
 
@@ -106,7 +106,7 @@ export default function HomePage() {
               </span>
             </div>
 
-            {/* Quick Actions */}
+            {/* Quick Actions con New Sets */}
             <div className="bg-slate-800/30 backdrop-blur-sm rounded-xl p-4 max-w-md mx-auto">
               <div className="text-sm text-slate-400 mb-3">Quick Start:</div>
               <div className="flex justify-center gap-2">
@@ -116,8 +116,8 @@ export default function HomePage() {
                 <Link href="/find-combos-from-cards" className="px-3 py-2 bg-purple-500/20 text-purple-400 rounded-lg text-xs hover:bg-purple-500/30 transition-colors">
                   🃏 Dalle mie carte
                 </Link>
-                <Link href="/build-from-cards" className="px-3 py-2 bg-pink-500/20 text-pink-400 rounded-lg text-xs hover:bg-pink-500/30 transition-colors">
-                  ⚡ Costruisci deck
+                <Link href="/new-sets-combos" className="px-3 py-2 bg-red-500/20 text-red-400 rounded-lg text-xs hover:bg-red-500/30 transition-colors">
+                  🔥 Nuove combo
                 </Link>
               </div>
             </div>
@@ -155,6 +155,15 @@ export default function HomePage() {
                   </span>
                 </div>
               )}
+
+              {/* Badge "New" per New Sets */}
+              {feature.id === 'new-sets-analysis' && (
+                <div className="absolute top-4 right-4 z-10">
+                  <span className="px-2 py-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded-full text-xs animate-pulse">
+                    New!
+                  </span>
+                </div>
+              )}
               
               {/* Header */}
               <div className="flex items-center gap-4 mb-4">
@@ -186,7 +195,7 @@ export default function HomePage() {
                         flex items-center justify-center gap-2
                       `}>
                         <span>🪄</span>
-                        Inizia ora
+                        {feature.id === 'new-sets-analysis' ? 'Scopri nuove combo' : 'Inizia ora'}
                       </button>
                     </Link>
                   ) : (
@@ -210,7 +219,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Feature Spotlight */}
+      {/* Feature Spotlight con New Sets */}
       <div className="bg-slate-800/30 backdrop-blur-sm border-y border-slate-700">
         <div className="max-w-7xl mx-auto px-4 py-16">
           <div className="text-center mb-12">
@@ -225,7 +234,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-bold text-white mb-2">1. Scegli il tuo approccio</h3>
               <p className="text-slate-400 text-sm">
-                Parti da colori, carte specifiche, o deck parziali. L'AI si adatta al tuo stile.
+                Parti da colori, carte specifiche, deck parziali o dalle ultime espansioni. L'AI si adatta al tuo stile.
               </p>
             </div>
             
@@ -235,7 +244,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-bold text-white mb-2">2. L'AI analizza</h3>
               <p className="text-slate-400 text-sm">
-                Algoritmi avanzati esplorano migliaia di combinazioni per trovare sinergie nascoste.
+                Algoritmi avanzati esplorano migliaia di combinazioni per trovare sinergie nascoste e meta-breaking.
               </p>
             </div>
             
@@ -245,9 +254,42 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-bold text-white mb-2">3. Domina Arena</h3>
               <p className="text-slate-400 text-sm">
-                Importa i deck ottimizzati e sorprendi i tuoi avversari con combo innovative.
+                Importa i deck ottimizzati e sorprendi i tuoi avversari con combo innovative dalle ultime carte.
               </p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* New Sets Highlight Section */}
+      <div className="bg-gradient-to-r from-red-900/30 to-orange-900/30 backdrop-blur-sm border-y border-red-800/50">
+        <div className="max-w-7xl mx-auto px-4 py-12">
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <span className="text-2xl">🔥</span>
+              <h2 className="text-2xl font-bold text-white">Nuove Espansioni, Nuove Combo</h2>
+              <span className="text-2xl">🔥</span>
+            </div>
+            <p className="text-slate-300 mb-6 max-w-3xl mx-auto">
+              L'AI analizza automaticamente le carte delle ultime espansioni e scopre combo mai viste prima. 
+              Trova sinergie interne tra nuove carte e combinazioni innovative con il tuo arsenale esistente.
+            </p>
+            <div className="flex justify-center gap-4 text-sm mb-6">
+              <span className="px-3 py-1 bg-red-500/20 text-red-400 rounded-full border border-red-500/30">
+                Combo Interne
+              </span>
+              <span className="px-3 py-1 bg-orange-500/20 text-orange-400 rounded-full border border-orange-500/30">
+                Cross-Set Synergies
+              </span>
+              <span className="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full border border-yellow-500/30">
+                Meta Impact
+              </span>
+            </div>
+            <Link href="/new-sets-combos">
+              <button className="bg-gradient-to-r from-red-600 to-orange-600 text-white font-medium px-6 py-3 rounded-lg hover:from-red-700 hover:to-orange-700 transition-all">
+                Esplora Combo delle Nuove Espansioni
+              </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -269,10 +311,10 @@ export default function HomePage() {
                 Scopri Combo Ora
               </button>
             </Link>
-            <Link href="/find-combos-from-cards">
-              <button className="border border-purple-400 text-purple-400 font-medium px-8 py-3 rounded-lg hover:bg-purple-400/10 transition-all flex items-center justify-center gap-2">
-                <span>🃏</span>
-                Dalle Tue Carte
+            <Link href="/new-sets-combos">
+              <button className="border border-red-400 text-red-400 font-medium px-8 py-3 rounded-lg hover:bg-red-400/10 transition-all flex items-center justify-center gap-2">
+                <span>🔥</span>
+                Nuove Espansioni
               </button>
             </Link>
           </div>
@@ -303,7 +345,7 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-      </footer>
+      </div>
     </div>
   )
 }
