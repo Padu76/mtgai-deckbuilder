@@ -1,322 +1,247 @@
 // src/app/page.tsx
+'use client'
+
+import { useState } from 'react'
 import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { 
+  Search, 
+  Wand2, 
+  Zap, 
+  TrendingUp, 
+  Users, 
+  Trophy,
+  Sparkles,
+  Target,
+  Wrench
+} from 'lucide-react'
 
 export default function HomePage() {
+  const [hoveredFeature, setHoveredFeature] = useState<string | null>(null)
+
   const features = [
     {
-      icon: '🔍',
-      title: 'Analisi AI Avanzata',
-      description: 'L\'intelligenza artificiale analizza migliaia di carte per trovare sinergie nascoste e combo potenti'
-    },
-    {
-      icon: '⚡',
-      title: 'Combo Infinite',
-      description: 'Trova automaticamente combo infinite, engine di valore e win condition ottimali'
-    },
-    {
-      icon: '🎯',
-      title: 'Ottimizzazione Meta',
-      description: 'Deck bilanciati e competitivi, pronti per l\'import diretto in MTG Arena'
-    },
-    {
-      icon: '📊',
-      title: 'Curve Perfette',
-      description: 'Analisi automatica di mana curve, sinergie e ratios per massima consistenza'
-    }
-  ]
-
-  const comboTypes = [
-    { name: 'Combo Infinite', icon: '∞', description: 'Loop infiniti per vittorie immediate' },
-    { name: 'Poison/Toxic', icon: '☠️', description: 'Strategie veleno con proliferate' },
-    { name: 'Token Swarm', icon: '💥', description: 'Ondate di creature pedina' },
-    { name: 'Mill Engine', icon: '📚', description: 'Svuota biblioteca avversario' },
-    { name: 'Value Engine', icon: '📈', description: 'Vantaggio carte continuativo' },
-    { name: 'Lock/Stax', icon: '🔒', description: 'Controllo totale del gioco' }
-  ]
-
-  const tools = [
-    {
-      href: '/combo-builder',
-      title: 'AI Combo Builder',
-      subtitle: 'Crea da zero',
-      description: 'Seleziona colori e formato, l\'AI trova automaticamente le migliori combo',
-      icon: '🧠',
-      gradient: 'from-purple-600 to-blue-600',
-      hoverGradient: 'hover:from-purple-500 hover:to-blue-500'
-    },
-    {
-      href: '/find-combos',
+      id: 'combo-discovery',
+      icon: <Search className="w-8 h-8" />,
       title: 'Trova Combo',
-      subtitle: 'Cerca per carta',
-      description: 'Inserisci una carta specifica e scopri tutte le combo possibili',
-      icon: '🔎',
-      gradient: 'from-orange-600 to-red-600', 
-      hoverGradient: 'hover:from-orange-500 hover:to-red-500'
+      subtitle: 'Scopri sinergie nascoste',
+      description: 'Cerca combo innovative partendo da una o più carte. L\'AI trova sinergie che non conoscevi.',
+      link: '/combo-builder',
+      color: 'from-blue-500 to-cyan-400',
+      bgColor: 'bg-blue-500/10 hover:bg-blue-500/20'
     },
     {
-      href: '/deck-completion',
+      id: 'deck-optimizer', 
+      icon: <Wrench className="w-8 h-8" />,
       title: 'Completa Deck',
       subtitle: 'Ottimizza esistente',
-      description: 'Carica un deck parziale e l\'AI suggerisce le carte mancanti',
-      icon: '🛠️',
-      gradient: 'from-green-600 to-teal-600',
-      hoverGradient: 'hover:from-green-500 hover:to-teal-500'
+      description: 'Carica un deck parziale e l\'AI suggerisce le carte mancanti per renderlo competitivo.',
+      link: '/deck-optimizer',
+      color: 'from-green-500 to-emerald-400',
+      bgColor: 'bg-green-500/10 hover:bg-green-500/20'
+    },
+    {
+      id: 'meta-analysis',
+      icon: <TrendingUp className="w-8 h-8" />,
+      title: 'Analisi Meta',
+      subtitle: 'Studia tendenze',
+      description: 'Analizza il metagame corrente e scopri quali combo dominano la scena competitiva.',
+      link: '/meta-analysis',
+      color: 'from-purple-500 to-pink-400',
+      bgColor: 'bg-purple-500/10 hover:bg-purple-500/20',
+      comingSoon: true
+    },
+    {
+      id: 'collection-sync',
+      icon: <Target className="w-8 h-8" />,
+      title: 'Collezione Arena',
+      subtitle: 'Sincronizza account',
+      description: 'Collega il tuo account MTG Arena per vedere solo combo realizzabili con le tue carte.',
+      link: '/collection-sync',
+      color: 'from-orange-500 to-red-400',
+      bgColor: 'bg-orange-500/10 hover:bg-orange-500/20',
+      comingSoon: true
     }
+  ]
+
+  const stats = [
+    { label: 'Combo Scoperte', value: '12,847+', icon: <Zap className="w-5 h-5" /> },
+    { label: 'Utenti Attivi', value: '2,341', icon: <Users className="w-5 h-5" /> },
+    { label: 'Deck Ottimizzati', value: '5,629', icon: <Trophy className="w-5 h-5" /> }
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-      {/* Header */}
-      <header className="relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-purple-900/20 to-blue-900/20" />
-        <div className="relative max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center font-bold text-white text-xl">
-                M
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-white">MTG AI Deckbuilder</h1>
-                <p className="text-sm text-gray-400">Powered by Artificial Intelligence</p>
-              </div>
-            </div>
-            
-            <nav className="hidden lg:flex items-center space-x-4">
-              <Link href="/combo-builder" className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1 bg-purple-600/20 px-3 py-2 rounded-lg border border-purple-500/30">
-                <span>🧠</span>
-                <span>AI Builder</span>
-              </Link>
-              <Link href="/find-combos" className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1 bg-orange-600/20 px-3 py-2 rounded-lg border border-orange-500/30">
-                <span>🔎</span>
-                <span>Trova Combo</span>
-              </Link>
-              <Link href="/deck-completion" className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1 bg-green-600/20 px-3 py-2 rounded-lg border border-green-500/30">
-                <span>🛠️</span>
-                <span>Completa Deck</span>
-              </Link>
-              <Link href="/admin" className="text-gray-300 hover:text-white transition-colors">Admin</Link>
-            </nav>
-
-            {/* Mobile menu button */}
-            <button className="lg:hidden text-gray-300 hover:text-white">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </header>
-
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Hero Section */}
-      <section className="relative py-20 px-4">
-        <div className="absolute inset-0 bg-gradient-to-r from-purple-900/10 via-transparent to-blue-900/10" />
-        <div className="relative max-w-6xl mx-auto text-center">
-          <div className="mb-8">
-            <h2 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent mb-6">
-              AI Deck Builder
-            </h2>
-            <p className="text-xl text-gray-300 max-w-3xl mx-auto mb-8">
-              L'intelligenza artificiale trova automaticamente le migliori combo per i tuoi colori preferiti.
-              Sinergie nascoste, curve ottimali, export diretto in MTG Arena.
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-purple-600/20 to-pink-600/20" />
+        <div className="relative max-w-7xl mx-auto px-4 py-20">
+          <div className="text-center">
+            <div className="flex items-center justify-center mb-6">
+              <Sparkles className="w-8 h-8 text-purple-400 mr-3" />
+              <h1 className="text-5xl font-bold text-white">
+                MTG Arena AI
+              </h1>
+              <Sparkles className="w-8 h-8 text-purple-400 ml-3" />
+            </div>
+            <p className="text-xl text-slate-300 mb-4 max-w-2xl mx-auto">
+              L'intelligenza artificiale più avanzata per scoprire combo nascoste e ottimizzare i tuoi deck su Magic Arena
             </p>
-          </div>
-        </div>
-      </section>
-
-      {/* AI Tools Section */}
-      <section className="py-16 px-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h3 className="text-3xl font-bold text-white mb-4">Strumenti AI per Deck Building</h3>
-            <p className="text-gray-300 text-lg">Scegli il metodo che preferisci per creare il deck perfetto</p>
-          </div>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            {tools.map((tool, idx) => (
-              <Link
-                key={idx}
-                href={tool.href}
-                className={`group block bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700 hover:border-gray-500 transition-all transform hover:scale-105 hover:shadow-2xl`}
-              >
-                <div className="text-center">
-                  <div className={`w-16 h-16 bg-gradient-to-br ${tool.gradient} rounded-2xl flex items-center justify-center text-2xl mb-4 mx-auto group-hover:scale-110 transition-transform`}>
-                    {tool.icon}
-                  </div>
-                  <h4 className="text-xl font-bold text-white mb-1">{tool.title}</h4>
-                  <p className="text-sm text-purple-400 mb-3 font-medium">{tool.subtitle}</p>
-                  <p className="text-gray-400 leading-relaxed">{tool.description}</p>
-                  
-                  <div className={`mt-6 inline-flex items-center px-6 py-3 bg-gradient-to-r ${tool.gradient} ${tool.hoverGradient} text-white font-medium rounded-lg transition-all`}>
-                    <span className="mr-2">{tool.icon}</span>
-                    Inizia ora
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Combo Types Preview */}
-      <section className="py-16 px-4 bg-gray-800/30">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h3 className="text-3xl font-bold text-white mb-4">Tipi di Combo Supportate</h3>
-            <p className="text-gray-300 text-lg">L'AI riconosce e ottimizza automaticamente queste strategie</p>
-          </div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {comboTypes.map((combo, idx) => (
-              <div
-                key={idx}
-                className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700 hover:border-purple-500/50 transition-all transform hover:scale-105"
-              >
-                <div className="text-3xl mb-3">{combo.icon}</div>
-                <h4 className="text-xl font-bold text-white mb-2">{combo.name}</h4>
-                <p className="text-gray-400">{combo.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="py-16 px-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h3 className="text-3xl font-bold text-white mb-4">Perché usare l'AI?</h3>
-            <p className="text-gray-300 text-lg">L'intelligenza artificiale rivoluziona il deck building</p>
-          </div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {features.map((feature, idx) => (
-              <div key={idx} className="text-center group">
-                <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center text-2xl mb-4 mx-auto group-hover:scale-110 transition-transform">
-                  {feature.icon}
-                </div>
-                <h4 className="text-xl font-bold text-white mb-3">{feature.title}</h4>
-                <p className="text-gray-400 leading-relaxed">{feature.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section className="py-16 px-4 bg-gray-800/30">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12">
-            <h3 className="text-3xl font-bold text-white mb-4">Come Funziona</h3>
-            <p className="text-gray-300 text-lg">Workflow semplice per risultati professionali</p>
-          </div>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { 
-                step: '1', 
-                title: 'Scegli il Metodo', 
-                description: 'Costruisci da zero, cerca combo per carta specifica o completa un deck esistente'
-              },
-              { 
-                step: '2', 
-                title: 'AI Analizza', 
-                description: 'L\'intelligenza artificiale esamina migliaia di carte e identifica le sinergie ottimali'
-              },
-              { 
-                step: '3', 
-                title: 'Deck Competitivo', 
-                description: 'Ottieni un deck bilanciato, testato e pronto per l\'export diretto in MTG Arena'
-              }
-            ].map((step, idx) => (
-              <div key={idx} className="text-center">
-                <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-xl font-bold text-white mb-4 mx-auto">
-                  {step.step}
-                </div>
-                <h4 className="text-xl font-bold text-white mb-3">{step.title}</h4>
-                <p className="text-gray-400 leading-relaxed">{step.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Stats */}
-      <section className="py-16 px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-gradient-to-r from-gray-800 to-gray-900 rounded-3xl p-8 border border-gray-700">
-            <div className="grid md:grid-cols-3 gap-8 text-center">
-              <div>
-                <div className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent mb-2">
-                  50,000+
-                </div>
-                <div className="text-gray-300">Carte analizzate</div>
-              </div>
-              <div>
-                <div className="text-4xl font-bold bg-gradient-to-r from-green-400 to-teal-400 bg-clip-text text-transparent mb-2">
-                  1,000+
-                </div>
-                <div className="text-gray-300">Combo identificate</div>
-              </div>
-              <div>
-                <div className="text-4xl font-bold bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent mb-2">
-                  Arena Ready
-                </div>
-                <div className="text-gray-300">Export diretto</div>
-              </div>
+            <div className="flex items-center justify-center gap-2 text-sm text-slate-400">
+              <Badge variant="outline" className="border-purple-400 text-purple-400">
+                Standard
+              </Badge>
+              <Badge variant="outline" className="border-blue-400 text-blue-400">
+                Historic
+              </Badge>
+              <Badge variant="outline" className="border-green-400 text-green-400">
+                Brawl
+              </Badge>
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* CTA Final */}
-      <section className="py-20 px-4 text-center">
-        <div className="max-w-4xl mx-auto">
-          <h3 className="text-4xl font-bold text-white mb-6">
-            Pronto a dominare il meta?
-          </h3>
-          <p className="text-xl text-gray-300 mb-8">
-            Scegli il tuo approccio preferito e lascia che l'AI ottimizzi la tua strategia
+      {/* Stats Bar */}
+      <div className="bg-slate-800/50 backdrop-blur-sm border-y border-slate-700">
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {stats.map((stat, index) => (
+              <div key={index} className="text-center">
+                <div className="flex items-center justify-center mb-2">
+                  {stat.icon}
+                  <span className="text-3xl font-bold text-white ml-2">
+                    {stat.value}
+                  </span>
+                </div>
+                <p className="text-slate-400">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Features Grid */}
+      <div className="max-w-7xl mx-auto px-4 py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold text-white mb-4">
+            Tutto quello che serve per dominare Arena
+          </h2>
+          <p className="text-slate-400 max-w-2xl mx-auto">
+            Scopri nuove strategie, ottimizza i tuoi deck e resta sempre un passo avanti al meta con l'AI più potente del gioco.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {features.map((feature) => (
+            <Card 
+              key={feature.id}
+              className={`relative bg-slate-800/50 border-slate-700 transition-all duration-300 hover:scale-105 hover:shadow-2xl ${feature.bgColor} group cursor-pointer`}
+              onMouseEnter={() => setHoveredFeature(feature.id)}
+              onMouseLeave={() => setHoveredFeature(null)}
+            >
+              {feature.comingSoon && (
+                <div className="absolute top-4 right-4 z-10">
+                  <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500">
+                    Coming Soon
+                  </Badge>
+                </div>
+              )}
+              
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-xl bg-gradient-to-r ${feature.color} text-white`}>
+                    {feature.icon}
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl text-white group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:bg-clip-text group-hover:from-white group-hover:to-slate-300">
+                      {feature.title}
+                    </CardTitle>
+                    <CardDescription className="text-slate-400">
+                      {feature.subtitle}
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="space-y-4">
+                <p className="text-slate-300 leading-relaxed">
+                  {feature.description}
+                </p>
+                
+                <div className="pt-2">
+                  {feature.comingSoon ? (
+                    <Button 
+                      disabled 
+                      className="w-full bg-slate-700 text-slate-400 cursor-not-allowed"
+                    >
+                      <Wand2 className="w-4 h-4 mr-2" />
+                      Prossimamente
+                    </Button>
+                  ) : (
+                    <Link href={feature.link} className="block">
+                      <Button className={`w-full bg-gradient-to-r ${feature.color} text-white hover:shadow-lg transition-all duration-300 transform hover:scale-105`}>
+                        <Wand2 className="w-4 h-4 mr-2" />
+                        Inizia ora
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              </CardContent>
+
+              {/* Hover Effect Overlay */}
+              {hoveredFeature === feature.id && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none" />
+              )}
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Call to Action */}
+      <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 backdrop-blur-sm">
+        <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+          <h2 className="text-4xl font-bold text-white mb-4">
+            Pronto a rivoluzionare il tuo gioco?
+          </h2>
+          <p className="text-xl text-slate-300 mb-8">
+            Migliaia di giocatori stanno già usando l'AI per dominare su MTG Arena. 
+            Unisciti a loro e scopri combo che cambieranno per sempre il tuo approccio al gioco.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link 
-              href="/combo-builder"
-              className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold text-lg rounded-xl hover:from-purple-500 hover:to-blue-500 transition-all transform hover:scale-105 shadow-2xl"
-            >
-              <span className="mr-3">🧠</span>
-              Crea da Zero
+            <Link href="/combo-builder">
+              <Button size="lg" className="bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 px-8 py-3">
+                <Search className="w-5 h-5 mr-2" />
+                Scopri Combo Ora
+              </Button>
             </Link>
-            <Link 
-              href="/find-combos"
-              className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-orange-600 to-red-600 text-white font-bold text-lg rounded-xl hover:from-orange-500 hover:to-red-500 transition-all transform hover:scale-105 shadow-2xl"
-            >
-              <span className="mr-3">🔎</span>
-              Trova Combo
+            <Link href="/deck-optimizer">
+              <Button size="lg" variant="outline" className="border-purple-400 text-purple-400 hover:bg-purple-400/10 px-8 py-3">
+                <Wrench className="w-5 h-5 mr-2" />
+                Ottimizza Deck
+              </Button>
             </Link>
           </div>
         </div>
-      </section>
+      </div>
 
       {/* Footer */}
-      <footer className="border-t border-gray-800 py-12 px-4">
-        <div className="max-w-6xl mx-auto">
+      <footer className="bg-slate-900 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="mb-4 md:mb-0">
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg flex items-center justify-center font-bold text-white">
-                  M
-                </div>
-                <span className="text-gray-300">MTG AI Deckbuilder</span>
-              </div>
+            <div className="text-slate-400 mb-4 md:mb-0">
+              <p>© 2025 MTG Arena AI. Creato con ❤️ per la community Magic.</p>
+              <p className="text-sm text-slate-500 mt-1">
+                Non affiliato con Wizards of the Coast. Magic: The Gathering è un marchio di Wizards of the Coast LLC.
+              </p>
             </div>
-            <div className="flex flex-wrap justify-center space-x-6 text-gray-400 text-sm">
-              <Link href="/combo-builder" className="hover:text-white transition-colors">AI Builder</Link>
-              <Link href="/find-combos" className="hover:text-white transition-colors">Trova Combo</Link>
-              <Link href="/deck-completion" className="hover:text-white transition-colors">Completa Deck</Link>
-              <Link href="/admin" className="hover:text-white transition-colors">Admin</Link>
+            <div className="flex items-center gap-4">
+              <Badge variant="outline" className="border-green-500 text-green-400">
+                🟢 Servizi Online
+              </Badge>
             </div>
-          </div>
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-500 text-sm">
-            <p>Magic: The Gathering è un marchio di Wizards of the Coast. Non affiliato con Wizards of the Coast.</p>
           </div>
         </div>
       </footer>
