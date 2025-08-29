@@ -24,7 +24,6 @@ function isLand(c: Card) {
 
 function matchesColors(c: Card, selected: string[]) {
   const id = (c.color_identity || [])
-  // Allow colorless + subset of selected
   return id.every(x => selected.includes(x))
 }
 
@@ -130,10 +129,10 @@ export async function POST(req: Request) {
   const lands = pickLands(colorCounts, nonLandsTotal)
 
   const arenaText = [
-    ...main.map(c => f"{c.quantity} {c.name}"),
-    "",
-    ...lands.map(c => f"{c.quantity} {c.name}")
-  ].join("\n")
+    ...main.map(c => `${c.quantity} ${c.name}`),
+    '',
+    ...lands.map(c => `${c.quantity} ${c.name}`)
+  ].join('\n')
 
   const deck = { main: [...main, ...lands], text: arenaText }
   return NextResponse.json(deck)
