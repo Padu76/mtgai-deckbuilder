@@ -1,6 +1,7 @@
-// src/app/admin/page.tsx - Enhanced con statistiche complete e import Commander Spellbook
+// src/app/admin/page.tsx - Fixed con query Supabase dirette
 'use client'
 import { useEffect, useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
 
 interface SeedingStats {
   combos_created: number
@@ -42,7 +43,8 @@ interface DatabaseStats {
   total_cards: number
   total_relationships: number
   combos_by_source: { [key: string]: number }
-  cards_by_type: { [key: string]: number }
+  cards_with_placeholders: number
+  arena_cards: number
 }
 
 export default function AdminPage() {
@@ -80,45 +82,66 @@ export default function AdminPage() {
     }
   }
 
-  async function loadComboStats() {
-    try {
-      const res = await fetch('/api/combos?limit=1')
-      const data = await res.json()
-      if (data.ok) {
-        setComboStats({
-          total: data.count || 0,
-          lastSync: 'N/D'
-        })
-      }
-    } catch (error) {
-      console.error('Error loading combo stats:', error)
-    }
-  }
-
   async function loadDatabaseStats() {
     try {
-      const k = keyParam || keyInput
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       
-      // Carica statistiche complete
-      const [combosRes, cardsRes, relationshipsRes] = await Promise.all([
-        fetch('/api/combos?limit=1', { headers: { 'x-admin-key': k } }),
-        fetch('/api/cards?limit=1', { headers: { 'x-admin-key': k } }),
-        fetch('/api/admin/stats', { headers: { 'x-admin-key': k } })
+      if (!supabaseUrl || !supabaseKey) {
+        console.error('Supabase config missing')
+        return
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseKey)
+      
+      // Query dirette a Supabase per statistiche accurate
+      const [combosResult, cardsResult, relationshipsResult] = await Promise.all([
+        supabase.from('combos').select('source', { count: 'exact' }),
+        supabase.from('cards').select('tags, in_arena', { count: 'exact' }),
+        supabase.from('combo_cards').select('*', { count: 'exact', head: true })
       ])
-      
-      const combosData = await combosRes.json()
-      const cardsData = await cardsRes.json()
-      const statsData = relationshipsRes.ok ? await relationshipsRes.json() : null
-      
+
+      // Calcola combo per fonte
+      const combosBySource: { [key: string]: number } = {}
+      if (combosResult.data) {
+        combosResult.data.forEach((combo: any) => {
+          const source = combo.source || 'unknown'
+          combosBySource[source] = (combosBySource[source] || 0) + 1
+        })
+      }
+
+      // Calcola carte con placeholder e Arena
+      let cardsWithPlaceholders = 0
+      let arenaCards = 0
+      if (cardsResult.data) {
+        cardsResult.data.forEach((card: any) => {
+          if (card.tags && card.tags.includes('placeholder')) {
+            cardsWithPlaceholders++
+          }
+          if (card.in_arena) {
+            arenaCards++
+          }
+        })
+      }
+
       setDatabaseStats({
-        total_combos: combosData.count || 0,
-        total_cards: cardsData.count || 0,
-        total_relationships: statsData?.total_relationships || 0,
-        combos_by_source: statsData?.combos_by_source || {},
-        cards_by_type: statsData?.cards_by_type || {}
+        total_combos: combosResult.count || 0,
+        total_cards: cardsResult.count || 0,
+        total_relationships: relationshipsResult.count || 0,
+        combos_by_source: combosBySource,
+        cards_with_placeholders: cardsWithPlaceholders,
+        arena_cards: arenaCards
       })
+
+      // Aggiorna anche lo stato combo per compatibilità
+      setComboStats({
+        total: combosResult.count || 0,
+        lastSync: 'Via DB diretta'
+      })
+
     } catch (error) {
       console.error('Error loading database stats:', error)
+      setStatus('Errore caricamento statistiche database')
     }
   }
 
@@ -132,7 +155,6 @@ export default function AdminPage() {
       setAllowed(true)
       setStatus('✅ Accesso admin abilitato.')
       loadStatus()
-      loadComboStats()
       loadDatabaseStats()
     } else {
       setAllowed(false)
@@ -178,7 +200,6 @@ export default function AdminPage() {
         setStatus('❌ Errore sync combo: ' + (json.error || res.status))
       } else {
         setStatus(`✅ Sync combo OK: ${json.inserted} nuove combo aggiunte (${json.processed} processate)`)
-        loadComboStats()
         loadDatabaseStats()
       }
     } catch (e: any) { 
@@ -210,7 +231,6 @@ export default function AdminPage() {
       
       if (result.success) {
         setStatus(`✅ Seeding completato: ${result.stats?.combos_created} combo, ${result.stats?.cards_created} carte create`)
-        loadComboStats()
         loadDatabaseStats()
       } else {
         setStatus('❌ Errore seeding: ' + result.message)
@@ -231,6 +251,22 @@ export default function AdminPage() {
     
     try {
       const k = keyParam || keyInput
+      
+      // Prima testa la connessione all'API Commander Spellbook
+      setStatus('⏳ Testando connessione Commander Spellbook...')
+      const testRes = await fetch('https://backend.commanderspellbook.com/combos/', {
+        headers: {
+          'User-Agent': 'MTGArenaAI-DeckBuilder/1.0',
+          'Accept': 'application/json'
+        }
+      })
+      
+      if (!testRes.ok) {
+        throw new Error(`Commander Spellbook API non disponibile: ${testRes.status}`)
+      }
+      
+      setStatus('⏳ API disponibile, avvio import...')
+      
       const res = await fetch('/api/admin/import-commander-spellbook', {
         method: 'POST',
         headers: {
@@ -238,17 +274,21 @@ export default function AdminPage() {
         },
         body: JSON.stringify({
           adminKey: k,
-          maxCombos: 150, // Importa max 150 combo di alta qualità
-          minQuality: 5   // Qualità minima 5/10
+          maxCombos: 100, // Ridotto per evitare timeout
+          minQuality: 6   // Qualità più alta per primi test
         })
       })
+      
+      if (!res.ok) {
+        const errorText = await res.text()
+        throw new Error(`HTTP ${res.status}: ${errorText}`)
+      }
       
       const result: ImportResult = await res.json()
       setImportResult(result)
       
       if (result.success) {
         setStatus(`✅ Import completato: ${result.stats?.imported} combo importate da Commander Spellbook`)
-        loadComboStats()
         loadDatabaseStats()
       } else {
         setStatus('❌ Errore import: ' + result.message)
@@ -256,7 +296,12 @@ export default function AdminPage() {
       
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Errore sconosciuto'
-      setStatus('❌ Errore di rete: ' + errorMsg)
+      setStatus('❌ Errore import: ' + errorMsg)
+      setImportResult({
+        success: false,
+        message: errorMsg,
+        errors: [errorMsg]
+      })
     } finally {
       setImportingCombos(false)
     }
@@ -326,7 +371,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Database Statistics */}
+        {/* Database Statistics - Migliorato */}
         {databaseStats && (
           <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 mb-8">
             <h2 className="text-2xl font-bold text-white mb-6">Database Statistics</h2>
@@ -343,6 +388,9 @@ export default function AdminPage() {
                   {databaseStats.total_cards.toLocaleString()}
                 </div>
                 <div className="text-gray-300">Carte Totali</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  ({databaseStats.arena_cards} Arena, {databaseStats.cards_with_placeholders} placeholder)
+                </div>
               </div>
               <div className="text-center">
                 <div className="text-4xl font-bold text-purple-400 mb-2">
@@ -354,29 +402,17 @@ export default function AdminPage() {
 
             {/* Combo by Source */}
             {Object.keys(databaseStats.combos_by_source).length > 0 && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-lg font-bold text-white mb-3">Combo per Fonte</h3>
-                  <div className="space-y-2">
-                    {Object.entries(databaseStats.combos_by_source).map(([source, count]) => (
-                      <div key={source} className="flex justify-between items-center bg-gray-700 rounded-lg px-3 py-2">
-                        <span className="text-gray-300 capitalize">{source.replace('_', ' ')}</span>
-                        <span className="text-white font-medium">{count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-bold text-white mb-3">Carte per Tipo</h3>
-                  <div className="space-y-2">
-                    {Object.entries(databaseStats.cards_by_type).slice(0, 5).map(([type, count]) => (
-                      <div key={type} className="flex justify-between items-center bg-gray-700 rounded-lg px-3 py-2">
-                        <span className="text-gray-300">{type}</span>
-                        <span className="text-white font-medium">{count}</span>
-                      </div>
-                    ))}
-                  </div>
+              <div>
+                <h3 className="text-lg font-bold text-white mb-3">Combo per Fonte</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                  {Object.entries(databaseStats.combos_by_source).map(([source, count]) => (
+                    <div key={source} className="flex justify-between items-center bg-gray-700 rounded-lg px-3 py-2">
+                      <span className="text-gray-300 capitalize">
+                        {source.replace('_', ' ').replace('manual curated', 'Manual')}
+                      </span>
+                      <span className="text-white font-medium">{count}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -397,15 +433,15 @@ export default function AdminPage() {
               </div>
             </div>
             
-            {info && (
+            {databaseStats && (
               <div className="bg-gray-700 rounded-lg p-3 mb-4 text-xs">
                 <div className="flex justify-between mb-1">
                   <span className="text-gray-400">Totali</span>
-                  <span className="text-white">{info.total_cards?.toLocaleString()}</span>
+                  <span className="text-white">{databaseStats.total_cards.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Arena</span>
-                  <span className="text-white">{info.total_arena?.toLocaleString()}</span>
+                  <span className="text-white">{databaseStats.arena_cards.toLocaleString()}</span>
                 </div>
               </div>
             )}
@@ -435,11 +471,11 @@ export default function AdminPage() {
               </div>
             </div>
             
-            {comboStats && (
+            {databaseStats && (
               <div className="bg-gray-700 rounded-lg p-3 mb-4 text-xs">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Combo DB</span>
-                  <span className="text-white">{comboStats.total.toLocaleString()}</span>
+                  <span className="text-white">{databaseStats.total_combos.toLocaleString()}</span>
                 </div>
               </div>
             )}
@@ -488,7 +524,7 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* NUOVO: Commander Spellbook Import */}
+          {/* Commander Spellbook Import */}
           <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
             <div className="flex items-center mb-4">
               <div className="w-12 h-12 bg-orange-600 rounded-lg flex items-center justify-center mr-4">
@@ -496,7 +532,7 @@ export default function AdminPage() {
               </div>
               <div>
                 <h3 className="text-lg font-bold text-white">CS Import</h3>
-                <p className="text-gray-400 text-xs">150+ combo</p>
+                <p className="text-gray-400 text-xs">100+ combo</p>
               </div>
             </div>
             
@@ -545,15 +581,25 @@ export default function AdminPage() {
                   </div>
                   <div className="text-center">
                     <div className="text-xl font-bold text-green-100">
-                      {seedingResult.stats.cards_created}
+                      {seedingResult.stats.total_combos}
                     </div>
-                    <div className="text-green-300 text-xs">Carte</div>
+                    <div className="text-green-300 text-xs">Totali DB</div>
                   </div>
                   <div className="text-center">
                     <div className="text-xl font-bold text-green-100">
                       {seedingResult.stats.relationships_created}
                     </div>
                     <div className="text-green-300 text-xs">Relazioni</div>
+                  </div>
+                </div>
+              )}
+              
+              {seedingResult.errors && seedingResult.errors.length > 0 && (
+                <div className="bg-red-900/30 rounded-lg p-3 mt-4">
+                  <div className="text-red-200 text-sm">
+                    {seedingResult.errors.slice(0, 3).map((error, i) => (
+                      <div key={i}>{error}</div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -586,6 +632,16 @@ export default function AdminPage() {
                       {importResult.stats.total_fetched}
                     </div>
                     <div className="text-orange-300 text-xs">Totali API</div>
+                  </div>
+                </div>
+              )}
+              
+              {importResult.errors && importResult.errors.length > 0 && (
+                <div className="bg-red-900/30 rounded-lg p-3 mt-4">
+                  <div className="text-red-200 text-sm">
+                    {importResult.errors.slice(0, 3).map((error, i) => (
+                      <div key={i}>{error}</div>
+                    ))}
                   </div>
                 </div>
               )}
