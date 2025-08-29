@@ -182,6 +182,7 @@ export default function ComboBuilderPage() {
             mana_cost_total: combo.cards.reduce((sum, card) => sum + (card.mana_value || 0), 0),
             reliability: combo.consistency > 7 ? 'high' : combo.consistency > 4 ? 'medium' : 'low'
           }))
+          setCategories({})
         }
       } else {
         // Use standard combo analysis
@@ -201,6 +202,7 @@ export default function ComboBuilderPage() {
             ...combo,
             is_creative: false
           }))
+          setCategories(data.categories || {})
         }
       }
 
@@ -218,7 +220,6 @@ export default function ComboBuilderPage() {
       )
 
       setAvailableCombos(combos)
-      setCategories(data.categories || {})
       setStep(2)
 
     } catch (error) {
