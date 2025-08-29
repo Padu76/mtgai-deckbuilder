@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
 }
 
 function analyzeSeedCards(seedCards: SeedCard[]) {
-  const totalCards = seedCards.reduce((sum, seed) => sum + seed.quantity, 0)
+  const totalCards = seedCards.reduce((sum: number, seed: SeedCard) => sum + seed.quantity, 0)
   
   // Analyze colors
   const colorDistribution: Record<string, number> = {}
@@ -146,12 +146,12 @@ function analyzeSeedCards(seedCards: SeedCard[]) {
     const quantity = seed.quantity
 
     // Colors
-    (card.colors || []).forEach(color => {
+    (card.colors || []).forEach((color: string) => {
       colorDistribution[color] = (colorDistribution[color] || 0) + quantity
     })
 
     // Types
-    (card.types || []).forEach(type => {
+    (card.types || []).forEach((type: string) => {
       typeDistribution[type] = (typeDistribution[type] || 0) + quantity
     })
 
@@ -168,7 +168,7 @@ function analyzeSeedCards(seedCards: SeedCard[]) {
       'sacrifice', 'enters', 'dies', 'triggered', 'activated'
     ]
     
-    keywords.forEach(keyword => {
+    keywords.forEach((keyword: string) => {
       if (text.includes(keyword)) {
         keywordFrequency[keyword] = (keywordFrequency[keyword] || 0) + quantity
       }
@@ -191,7 +191,7 @@ function analyzeSeedCards(seedCards: SeedCard[]) {
     .slice(0, 5)
     .map(([keyword]) => keyword)
 
-  const avgManaCost = seedCards.reduce((sum, seed) => 
+  const avgManaCost = seedCards.reduce((sum: number, seed: SeedCard) => 
     sum + (seed.card.mana_value || 0) * seed.quantity, 0) / totalCards
 
   return {
