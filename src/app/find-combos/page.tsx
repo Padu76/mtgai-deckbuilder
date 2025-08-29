@@ -7,15 +7,20 @@ import CardPreview from '../../components/CardPreview'
 interface Card {
   id: string
   name: string
-  mana_cost: string | null
-  mana_value: number | null
-  colors: string[]
-  color_identity: string[]
-  types: string[]
-  oracle_text: string | null
-  rarity: string | null
-  set_code: string | null
-  image_url: string | null
+  mana_cost?: string
+  mana_value?: number
+  colors?: string[]
+  types?: string[]
+  oracle_text?: string
+  image_uris?: {
+    small?: string
+    normal?: string
+    large?: string
+  } | null
+  image_url?: string | null
+  rarity?: string
+  set_code?: string
+  color_identity?: string[]
 }
 
 interface ComboMatch {
