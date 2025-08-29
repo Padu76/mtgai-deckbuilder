@@ -2,7 +2,6 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import CardPreview from '@/components/CardPreview'
 
 interface Combo {
   id: string
@@ -107,7 +106,6 @@ export default function CombosPage() {
       
       const data = await response.json()
       if (data.ok) {
-        // Redirect to deck editor
         window.location.href = `/deck/${data.deck_id}`
       }
     } catch (error) {
@@ -297,11 +295,14 @@ export default function CombosPage() {
                   <div className="flex items-center space-x-2 overflow-x-auto pb-2">
                     {combo.cards.map(card => (
                       <div key={card.id} className="flex-shrink-0">
-                        <CardPreview
-                          card={card}
-                          size="small"
-                          className="hover:scale-110 transition-transform"
-                        />
+                        <div className="w-16 h-20 bg-gray-700 rounded border-2 border-purple-500/20 flex flex-col items-center justify-center text-center p-1 hover:scale-110 transition-transform cursor-pointer">
+                          <div className="text-xs text-white font-medium leading-tight mb-1">
+                            {card.name.length > 12 ? card.name.slice(0, 10) + '...' : card.name}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {card.mana_cost ? card.mana_cost.replace(/[{}]/g, '') : ''}
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
