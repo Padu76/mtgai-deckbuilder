@@ -1,4 +1,4 @@
-// src/app/admin/page.tsx - Fixed con query Supabase dirette
+// src/app/admin/page.tsx - Admin dashboard con pulsante Scryfall Import
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -22,6 +22,13 @@ interface ImportStats {
   errors: number
 }
 
+interface ScryfallStats {
+  cards_fetched: number
+  combo_patterns_found: number
+  combos_created: number
+  existing_combos_updated: number
+}
+
 interface SeedingResult {
   success: boolean
   message: string
@@ -34,6 +41,14 @@ interface ImportResult {
   success: boolean
   message: string
   stats?: ImportStats
+  errors?: string[]
+  log?: string[]
+}
+
+interface ScryfallResult {
+  success: boolean
+  message: string
+  stats?: ScryfallStats
   errors?: string[]
   log?: string[]
 }
@@ -65,6 +80,10 @@ export default function AdminPage() {
   // Import state
   const [importingCombos, setImportingCombos] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  
+  // Scryfall import state
+  const [importingScryfall, setImportingScryfall] = useState(false)
+  const [scryfallResult, setScryfallResult] = useState<ScryfallResult | null>(null)
 
   useEffect(() => {
     const url = new URL(window.location.href)
@@ -94,14 +113,12 @@ export default function AdminPage() {
 
       const supabase = createClient(supabaseUrl, supabaseKey)
       
-      // Query dirette a Supabase per statistiche accurate
       const [combosResult, cardsResult, relationshipsResult] = await Promise.all([
         supabase.from('combos').select('source', { count: 'exact' }),
         supabase.from('cards').select('tags, in_arena', { count: 'exact' }),
         supabase.from('combo_cards').select('*', { count: 'exact', head: true })
       ])
 
-      // Calcola combo per fonte
       const combosBySource: { [key: string]: number } = {}
       if (combosResult.data) {
         combosResult.data.forEach((combo: any) => {
@@ -110,12 +127,11 @@ export default function AdminPage() {
         })
       }
 
-      // Calcola carte con placeholder e Arena
       let cardsWithPlaceholders = 0
       let arenaCards = 0
       if (cardsResult.data) {
         cardsResult.data.forEach((card: any) => {
-          if (card.tags && card.tags.includes('placeholder')) {
+          if (card.tags && card.tags.some((tag: string) => tag.includes('placeholder'))) {
             cardsWithPlaceholders++
           }
           if (card.in_arena) {
@@ -133,7 +149,6 @@ export default function AdminPage() {
         arena_cards: arenaCards
       })
 
-      // Aggiorna anche lo stato combo per compatibilità
       setComboStats({
         total: combosResult.count || 0,
         lastSync: 'Via DB diretta'
@@ -148,23 +163,23 @@ export default function AdminPage() {
   function verify(k: string) {
     const ADMIN = process.env.NEXT_PUBLIC_ADMIN_KEY || ''
     if (!ADMIN) { 
-      setStatus('⚠️ Chiave admin non impostata nelle env.')
+      setStatus('Chiave admin non impostata nelle env.')
       return 
     }
     if (k === ADMIN) {
       setAllowed(true)
-      setStatus('✅ Accesso admin abilitato.')
+      setStatus('Accesso admin abilitato.')
       loadStatus()
       loadDatabaseStats()
     } else {
       setAllowed(false)
-      setStatus('❌ Chiave errata.')
+      setStatus('Chiave errata.')
     }
   }
 
   async function runCardsSync() {
     setSyncingCards(true)
-    setStatus('⏳ Avvio sync carte Scryfall...')
+    setStatus('Avvio sync carte Scryfall...')
     try {
       const k = keyParam || keyInput
       const res = await fetch('/api/admin/sync-scryfall', { 
@@ -173,14 +188,14 @@ export default function AdminPage() {
       const json = await res.json()
       
       if (!res.ok || json.ok === false) {
-        setStatus('❌ Errore sync carte: ' + (json.error || res.status))
+        setStatus('Errore sync carte: ' + (json.error || res.status))
       } else {
-        setStatus(`✅ Sync carte OK: ${json.upserts} carte, ${json.arena_cards} su Arena`)
+        setStatus(`Sync carte OK: ${json.upserts} carte, ${json.arena_cards} su Arena`)
         loadStatus()
         loadDatabaseStats()
       }
     } catch (e: any) { 
-      setStatus('❌ Errore: ' + e.message) 
+      setStatus('Errore: ' + e.message) 
     } finally {
       setSyncingCards(false)
     }
@@ -188,7 +203,7 @@ export default function AdminPage() {
 
   async function runComboSync() {
     setSyncingCombos(true)
-    setStatus('⏳ Avvio sync combo da Commander Spellbook e Cards Realm...')
+    setStatus('Avvio sync combo da Commander Spellbook e Cards Realm...')
     try {
       const k = keyParam || keyInput
       const res = await fetch('/api/admin/sync-combos', { 
@@ -197,13 +212,13 @@ export default function AdminPage() {
       const json = await res.json()
       
       if (!res.ok || json.ok === false) {
-        setStatus('❌ Errore sync combo: ' + (json.error || res.status))
+        setStatus('Errore sync combo: ' + (json.error || res.status))
       } else {
-        setStatus(`✅ Sync combo OK: ${json.inserted} nuove combo aggiunte (${json.processed} processate)`)
+        setStatus(`Sync combo OK: ${json.inserted} nuove combo aggiunte (${json.processed} processate)`)
         loadDatabaseStats()
       }
     } catch (e: any) { 
-      setStatus('❌ Errore: ' + e.message) 
+      setStatus('Errore: ' + e.message) 
     } finally {
       setSyncingCombos(false)
     }
@@ -212,7 +227,7 @@ export default function AdminPage() {
   async function runComboSeeding() {
     setSeedingCombos(true)
     setSeedingResult(null)
-    setStatus('⏳ Avvio seeding 50+ combo famose...')
+    setStatus('Avvio seeding combo Arena-filtered...')
     
     try {
       const k = keyParam || keyInput
@@ -230,15 +245,15 @@ export default function AdminPage() {
       setSeedingResult(result)
       
       if (result.success) {
-        setStatus(`✅ Seeding completato: ${result.stats?.combos_created} combo, ${result.stats?.cards_created} carte create`)
+        setStatus(`Seeding completato: ${result.stats?.combos_created} combo Arena-legal create`)
         loadDatabaseStats()
       } else {
-        setStatus('❌ Errore seeding: ' + result.message)
+        setStatus('Errore seeding: ' + result.message)
       }
       
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Errore sconosciuto'
-      setStatus('❌ Errore di rete: ' + errorMsg)
+      setStatus('Errore di rete: ' + errorMsg)
     } finally {
       setSeedingCombos(false)
     }
@@ -247,13 +262,12 @@ export default function AdminPage() {
   async function runCommanderSpellbookImport() {
     setImportingCombos(true)
     setImportResult(null)
-    setStatus('⏳ Importando combo da Commander Spellbook...')
+    setStatus('Importando combo da Commander Spellbook...')
     
     try {
       const k = keyParam || keyInput
       
-      // Prima testa la connessione all'API Commander Spellbook
-      setStatus('⏳ Testando connessione Commander Spellbook...')
+      setStatus('Testando connessione Commander Spellbook...')
       const testRes = await fetch('https://backend.commanderspellbook.com/combos/', {
         headers: {
           'User-Agent': 'MTGArenaAI-DeckBuilder/1.0',
@@ -265,7 +279,7 @@ export default function AdminPage() {
         throw new Error(`Commander Spellbook API non disponibile: ${testRes.status}`)
       }
       
-      setStatus('⏳ API disponibile, avvio import...')
+      setStatus('API disponibile, avvio import...')
       
       const res = await fetch('/api/admin/import-commander-spellbook', {
         method: 'POST',
@@ -274,8 +288,8 @@ export default function AdminPage() {
         },
         body: JSON.stringify({
           adminKey: k,
-          maxCombos: 100, // Ridotto per evitare timeout
-          minQuality: 6   // Qualità più alta per primi test
+          maxCombos: 100,
+          minQuality: 6
         })
       })
       
@@ -288,15 +302,15 @@ export default function AdminPage() {
       setImportResult(result)
       
       if (result.success) {
-        setStatus(`✅ Import completato: ${result.stats?.imported} combo importate da Commander Spellbook`)
+        setStatus(`Import completato: ${result.stats?.imported} combo importate da Commander Spellbook`)
         loadDatabaseStats()
       } else {
-        setStatus('❌ Errore import: ' + result.message)
+        setStatus('Errore import: ' + result.message)
       }
       
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Errore sconosciuto'
-      setStatus('❌ Errore import: ' + errorMsg)
+      setStatus('Errore import: ' + errorMsg)
       setImportResult({
         success: false,
         message: errorMsg,
@@ -304,6 +318,53 @@ export default function AdminPage() {
       })
     } finally {
       setImportingCombos(false)
+    }
+  }
+
+  async function runScryfallImport() {
+    setImportingScryfall(true)
+    setScryfallResult(null)
+    setStatus('Avvio import combo da Scryfall...')
+    
+    try {
+      const k = keyParam || keyInput
+      
+      const res = await fetch('/api/admin/import-scryfall-combos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          adminKey: k,
+          maxCards: 150
+        })
+      })
+      
+      if (!res.ok) {
+        const errorText = await res.text()
+        throw new Error(`HTTP ${res.status}: ${errorText}`)
+      }
+      
+      const result: ScryfallResult = await res.json()
+      setScryfallResult(result)
+      
+      if (result.success) {
+        setStatus(`Scryfall import completato: ${result.stats?.combos_created} combo create, ${result.stats?.cards_fetched} carte analizzate`)
+        loadDatabaseStats()
+      } else {
+        setStatus('Errore Scryfall import: ' + result.message)
+      }
+      
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Errore sconosciuto'
+      setStatus('Errore Scryfall import: ' + errorMsg)
+      setScryfallResult({
+        success: false,
+        message: errorMsg,
+        errors: [errorMsg]
+      })
+    } finally {
+      setImportingScryfall(false)
     }
   }
 
@@ -361,9 +422,9 @@ export default function AdminPage() {
         {/* Status */}
         {status && (
           <div className={`mb-6 p-4 rounded-lg border ${
-            status.includes('✅') 
+            status.includes('✅') || status.includes('completato')
               ? 'bg-green-900/50 border-green-500 text-green-100'
-              : status.includes('❌')
+              : status.includes('❌') || status.includes('Errore')
               ? 'bg-red-900/50 border-red-500 text-red-100'
               : 'bg-blue-900/50 border-blue-500 text-blue-100'
           }`}>
@@ -371,7 +432,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Database Statistics - Migliorato */}
+        {/* Database Statistics */}
         {databaseStats && (
           <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 mb-8">
             <h2 className="text-2xl font-bold text-white mb-6">Database Statistics</h2>
@@ -404,11 +465,11 @@ export default function AdminPage() {
             {Object.keys(databaseStats.combos_by_source).length > 0 && (
               <div>
                 <h3 className="text-lg font-bold text-white mb-3">Combo per Fonte</h3>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
                   {Object.entries(databaseStats.combos_by_source).map(([source, count]) => (
                     <div key={source} className="flex justify-between items-center bg-gray-700 rounded-lg px-3 py-2">
-                      <span className="text-gray-300 capitalize">
-                        {source.replace('_', ' ').replace('manual curated', 'Manual')}
+                      <span className="text-gray-300 capitalize text-sm">
+                        {source.replace(/_/g, ' ').replace('arena curated', 'Arena').replace('scryfall analysis', 'Scryfall')}
                       </span>
                       <span className="text-white font-medium">{count}</span>
                     </div>
@@ -419,16 +480,16 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Main Actions - 4 colonne */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+        {/* Main Actions - 5 colonne */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-8">
           {/* Cards Sync */}
-          <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
+          <div className="bg-gray-800 rounded-2xl p-5 border border-gray-700">
             <div className="flex items-center mb-4">
-              <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mr-4">
-                <span className="text-xl">🃏</span>
+              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
+                <span className="text-lg">🃏</span>
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">Sync Carte</h3>
+                <h3 className="text-base font-bold text-white">Sync Carte</h3>
                 <p className="text-gray-400 text-xs">Da Scryfall</p>
               </div>
             </div>
@@ -449,7 +510,7 @@ export default function AdminPage() {
             <button
               onClick={runCardsSync}
               disabled={syncingCards}
-              className={`w-full font-medium py-2 px-4 rounded-lg transition-colors text-sm ${
+              className={`w-full font-medium py-2 px-3 rounded-lg transition-colors text-sm ${
                 syncingCards
                   ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-500 text-white'
@@ -460,13 +521,13 @@ export default function AdminPage() {
           </div>
 
           {/* Combo Sync */}
-          <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
+          <div className="bg-gray-800 rounded-2xl p-5 border border-gray-700">
             <div className="flex items-center mb-4">
-              <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center mr-4">
-                <span className="text-xl">💫</span>
+              <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center mr-3">
+                <span className="text-lg">💫</span>
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">Sync Combo</h3>
+                <h3 className="text-base font-bold text-white">Sync Combo</h3>
                 <p className="text-gray-400 text-xs">Da esterni</p>
               </div>
             </div>
@@ -483,7 +544,7 @@ export default function AdminPage() {
             <button
               onClick={runComboSync}
               disabled={syncingCombos}
-              className={`w-full font-medium py-2 px-4 rounded-lg transition-colors text-sm ${
+              className={`w-full font-medium py-2 px-3 rounded-lg transition-colors text-sm ${
                 syncingCombos
                   ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   : 'bg-purple-600 hover:bg-purple-500 text-white'
@@ -494,27 +555,27 @@ export default function AdminPage() {
           </div>
 
           {/* Combo Seeding */}
-          <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
+          <div className="bg-gray-800 rounded-2xl p-5 border border-gray-700">
             <div className="flex items-center mb-4">
-              <div className="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center mr-4">
-                <span className="text-xl">🌱</span>
+              <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center mr-3">
+                <span className="text-lg">🌱</span>
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">Seed Combo</h3>
-                <p className="text-gray-400 text-xs">50+ famose</p>
+                <h3 className="text-base font-bold text-white">Seed Combo</h3>
+                <p className="text-gray-400 text-xs">Arena only</p>
               </div>
             </div>
             
             <div className="bg-gray-700 rounded-lg p-3 mb-4 text-xs">
               <div className="text-gray-300">
-                Popola il database con combo curate manualmente.
+                Combo curate per MTG Arena.
               </div>
             </div>
             
             <button
               onClick={runComboSeeding}
               disabled={seedingCombos}
-              className={`w-full font-medium py-2 px-4 rounded-lg transition-colors text-sm ${
+              className={`w-full font-medium py-2 px-3 rounded-lg transition-colors text-sm ${
                 seedingCombos
                   ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   : 'bg-green-600 hover:bg-green-500 text-white'
@@ -525,27 +586,27 @@ export default function AdminPage() {
           </div>
 
           {/* Commander Spellbook Import */}
-          <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
+          <div className="bg-gray-800 rounded-2xl p-5 border border-gray-700">
             <div className="flex items-center mb-4">
-              <div className="w-12 h-12 bg-orange-600 rounded-lg flex items-center justify-center mr-4">
-                <span className="text-xl">📚</span>
+              <div className="w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center mr-3">
+                <span className="text-lg">📚</span>
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">CS Import</h3>
+                <h3 className="text-base font-bold text-white">CS Import</h3>
                 <p className="text-gray-400 text-xs">100+ combo</p>
               </div>
             </div>
             
             <div className="bg-gray-700 rounded-lg p-3 mb-4 text-xs">
               <div className="text-gray-300">
-                Importa combo di qualità da Commander Spellbook.
+                Da Commander Spellbook.
               </div>
             </div>
             
             <button
               onClick={runCommanderSpellbookImport}
               disabled={importingCombos}
-              className={`w-full font-medium py-2 px-4 rounded-lg transition-colors text-sm ${
+              className={`w-full font-medium py-2 px-3 rounded-lg transition-colors text-sm ${
                 importingCombos
                   ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   : 'bg-orange-600 hover:bg-orange-500 text-white'
@@ -554,10 +615,41 @@ export default function AdminPage() {
               {importingCombos ? 'Importing...' : 'Import Combos'}
             </button>
           </div>
+
+          {/* NUOVO: Scryfall Import */}
+          <div className="bg-gray-800 rounded-2xl p-5 border border-gray-700">
+            <div className="flex items-center mb-4">
+              <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center mr-3">
+                <span className="text-lg">🔍</span>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Scryfall</h3>
+                <p className="text-gray-400 text-xs">AI patterns</p>
+              </div>
+            </div>
+            
+            <div className="bg-gray-700 rounded-lg p-3 mb-4 text-xs">
+              <div className="text-gray-300">
+                Analisi automatica carte Arena.
+              </div>
+            </div>
+            
+            <button
+              onClick={runScryfallImport}
+              disabled={importingScryfall}
+              className={`w-full font-medium py-2 px-3 rounded-lg transition-colors text-sm ${
+                importingScryfall
+                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+              }`}
+            >
+              {importingScryfall ? 'Analyzing...' : 'Import Scryfall'}
+            </button>
+          </div>
         </div>
 
         {/* Results Sections */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {/* Seeding Results */}
           {seedingResult && (
             <div className={`p-6 rounded-2xl border ${
@@ -568,11 +660,11 @@ export default function AdminPage() {
               <h3 className={`text-lg font-bold mb-4 ${
                 seedingResult.success ? 'text-green-100' : 'text-red-100'
               }`}>
-                Risultato Seeding
+                Risultato Seeding Arena
               </h3>
               
               {seedingResult.success && seedingResult.stats && (
-                <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="grid grid-cols-2 gap-4 mb-4">
                   <div className="text-center">
                     <div className="text-xl font-bold text-green-100">
                       {seedingResult.stats.combos_created}
@@ -584,22 +676,6 @@ export default function AdminPage() {
                       {seedingResult.stats.total_combos}
                     </div>
                     <div className="text-green-300 text-xs">Totali DB</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-green-100">
-                      {seedingResult.stats.relationships_created}
-                    </div>
-                    <div className="text-green-300 text-xs">Relazioni</div>
-                  </div>
-                </div>
-              )}
-              
-              {seedingResult.errors && seedingResult.errors.length > 0 && (
-                <div className="bg-red-900/30 rounded-lg p-3 mt-4">
-                  <div className="text-red-200 text-sm">
-                    {seedingResult.errors.slice(0, 3).map((error, i) => (
-                      <div key={i}>{error}</div>
-                    ))}
                   </div>
                 </div>
               )}
@@ -616,7 +692,7 @@ export default function AdminPage() {
               <h3 className={`text-lg font-bold mb-4 ${
                 importResult.success ? 'text-orange-100' : 'text-red-100'
               }`}>
-                Risultato Import Commander Spellbook
+                Risultato Import CS
               </h3>
               
               {importResult.success && importResult.stats && (
@@ -635,13 +711,35 @@ export default function AdminPage() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Scryfall Results */}
+          {scryfallResult && (
+            <div className={`p-6 rounded-2xl border ${
+              scryfallResult.success
+                ? 'bg-indigo-900/20 border-indigo-500'
+                : 'bg-red-900/20 border-red-500'
+            }`}>
+              <h3 className={`text-lg font-bold mb-4 ${
+                scryfallResult.success ? 'text-indigo-100' : 'text-red-100'
+              }`}>
+                Risultato Scryfall
+              </h3>
               
-              {importResult.errors && importResult.errors.length > 0 && (
-                <div className="bg-red-900/30 rounded-lg p-3 mt-4">
-                  <div className="text-red-200 text-sm">
-                    {importResult.errors.slice(0, 3).map((error, i) => (
-                      <div key={i}>{error}</div>
-                    ))}
+              {scryfallResult.success && scryfallResult.stats && (
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-indigo-100">
+                      {scryfallResult.stats.combos_created}
+                    </div>
+                    <div className="text-indigo-300 text-xs">Combo create</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-indigo-100">
+                      {scryfallResult.stats.cards_fetched}
+                    </div>
+                    <div className="text-indigo-300 text-xs">Carte analizzate</div>
                   </div>
                 </div>
               )}
