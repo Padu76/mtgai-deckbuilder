@@ -2,6 +2,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import CardPreview from '@/components/CardPreview'
 
 interface Card {
   id: string
@@ -437,15 +438,20 @@ export default function ComboBuilderPage() {
                   
                   <div className="mb-3">
                     <div className="text-sm text-gray-400 mb-1">Carte necessarie:</div>
-                    <div className="flex flex-wrap gap-1">
-                      {combo.cards.map(card => (
-                        <span 
-                          key={card.id} 
-                          className="text-xs bg-gray-700 text-white px-2 py-1 rounded"
-                        >
-                          {card.name}
-                        </span>
+                    <div className="flex flex-wrap gap-2">
+                      {combo.cards.slice(0, 3).map(card => (
+                        <CardPreview
+                          key={card.id}
+                          card={card}
+                          size="small"
+                          className="hover:scale-110 transition-transform"
+                        />
                       ))}
+                      {combo.cards.length > 3 && (
+                        <div className="w-16 h-22 bg-gray-700 rounded border-2 border-gray-600 flex items-center justify-center text-xs text-gray-400">
+                          +{combo.cards.length - 3}
+                        </div>
+                      )}
                     </div>
                   </div>
 
