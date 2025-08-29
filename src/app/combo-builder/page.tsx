@@ -38,7 +38,8 @@ export default function ComboBuilderPage() {
     format: 'historic' as 'standard' | 'historic' | 'brawl',
     categories: [] as string[],
     power_level_min: 5,
-    max_setup_turns: 5
+    max_setup_turns: 5,
+    max_cards_per_combo: 4
   })
   
   const [availableCombos, setAvailableCombos] = useState<ComboSuggestion[]>([])
@@ -113,7 +114,8 @@ export default function ComboBuilderPage() {
         
         combos = combos.filter((combo: ComboSuggestion) => 
           combo.power_level >= filters.power_level_min &&
-          combo.setup_turns <= filters.max_setup_turns
+          combo.setup_turns <= filters.max_setup_turns &&
+          combo.cards.length <= filters.max_cards_per_combo
         )
 
         setAvailableCombos(combos)
@@ -322,7 +324,7 @@ export default function ComboBuilderPage() {
             {/* Advanced Filters */}
             <div className="bg-gray-800 rounded-2xl p-6">
               <h3 className="text-xl font-bold text-white mb-4">Filtri Avanzati</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Livello Potenza Minimo: {filters.power_level_min}
@@ -362,6 +364,27 @@ export default function ComboBuilderPage() {
                   <div className="flex justify-between text-xs text-gray-400 mt-1">
                     <span>Veloce</span>
                     <span>Lento</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Max Carte per Combo: {filters.max_cards_per_combo}
+                  </label>
+                  <input
+                    type="range"
+                    min="2"
+                    max="6"
+                    value={filters.max_cards_per_combo}
+                    onChange={(e) => setFilters(prev => ({ 
+                      ...prev, 
+                      max_cards_per_combo: parseInt(e.target.value) 
+                    }))}
+                    className="w-full"
+                  />
+                  <div className="flex justify-between text-xs text-gray-400 mt-1">
+                    <span>2 carte</span>
+                    <span>6+ carte</span>
                   </div>
                 </div>
               </div>
