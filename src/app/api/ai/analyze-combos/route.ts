@@ -248,9 +248,14 @@ async function analyzeWithPatterns(cards: Card[], colors: string[]): Promise<Com
           mana_cost: card.mana_cost || '',
           mana_value: card.mana_value || 0,
           colors: Array.isArray(card.colors) ? card.colors : [],
+          color_identity: Array.isArray(card.color_identity) ? card.color_identity : [],
           oracle_text: card.oracle_text || '',
           rarity: card.rarity || 'common',
-          types: Array.isArray(card.types) ? card.types : []
+          types: Array.isArray(card.types) ? card.types : [],
+          power: card.power || null,
+          toughness: card.toughness || null,
+          set_code: card.set_code || null,
+          image_url: card.image_url || null
         }))
 
         const totalManaCost = processedCards.reduce((sum, card) => 
@@ -288,9 +293,14 @@ async function analyzeWithPatterns(cards: Card[], colors: string[]): Promise<Com
       mana_cost: card.mana_cost || '',
       mana_value: card.mana_value || 0,
       colors: Array.isArray(card.colors) ? card.colors : [],
+      color_identity: Array.isArray(card.color_identity) ? card.color_identity : [],
       oracle_text: card.oracle_text || '',
       rarity: card.rarity || 'common',
-      types: Array.isArray(card.types) ? card.types : []
+      types: Array.isArray(card.types) ? card.types : [],
+      power: card.power || null,
+      toughness: card.toughness || null,
+      set_code: card.set_code || null,
+      image_url: card.image_url || null
     }))
 
     if (sampleCards.length >= 2) {
