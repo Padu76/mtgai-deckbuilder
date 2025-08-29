@@ -54,7 +54,6 @@ export async function POST(request: NextRequest) {
     const { data: cards, error } = await supabase
       .from('cards')
       .select('*')
-      .eq('arena_legal', true)
       .not('oracle_text', 'is', null)
       .limit(1000)
 
