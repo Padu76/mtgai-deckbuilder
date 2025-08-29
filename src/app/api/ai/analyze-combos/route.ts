@@ -285,7 +285,7 @@ export async function POST(req: NextRequest) {
     // Map card names back to full card objects
     const processedCombos = uniqueCombos.map(combo => ({
       ...combo,
-      cards: combo.cards.map(cardName => 
+      cards: combo.cards.map((cardName: string) => 
         cards.find(c => c.name === cardName) || { name: cardName }
       ).filter(Boolean)
     })).filter(combo => combo.cards.length >= 2)
