@@ -352,10 +352,11 @@ function getStrategySupportCategories(strategy: BuildStrategy, analysis: any) {
         max_cards: 16,
         preferred_quantity: 4,
         filter: (card: Card) => {
-          return (card.types || []).includes('Creature') && 
-                 (card.mana_value || 0) <= 3 &&
-                 ((card.oracle_text || '').includes('haste') || 
-                  (card.power && parseInt(card.power) >= 2))
+          const isCreature = (card.types || []).includes('Creature')
+          const lowCost = (card.mana_value || 0) <= 3
+          const hasHaste = (card.oracle_text || '').includes('haste')
+          const highPower = card.power ? parseInt(card.power) >= 2 : false
+          return isCreature && lowCost && (hasHaste || highPower)
         },
         reasoning: 'Creature aggressive per pressione immediata'
       })
