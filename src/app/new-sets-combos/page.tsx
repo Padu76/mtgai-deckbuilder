@@ -1,1 +1,418 @@
+// src/app/new-sets-combos/page.tsx
+// Pagina per analisi combo delle nuove espansioni
 
+'use client'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+
+interface NewSetsResult {
+  success: boolean
+  message: string
+  stats?: {
+    new_cards_analyzed: number
+    existing_cards_matched: number
+    internal_combos: number
+    cross_combos: number
+    total_combos_created: number
+  }
+  sets_analyzed?: string[]
+  log?: string[]
+  errors?: string[]
+}
+
+interface ComboResult {
+  id: string
+  name: string
+  result_tag: string
+  steps: string
+  color_identity: string[]
+  source: string
+  cards?: {
+    name: string
+    image_url?: string
+    set?: string
+  }[]
+}
+
+const RECENT_SETS = [
+  { code: 'ltr', name: 'The Lord of the Rings', released: '2023-06-23' },
+  { code: 'mom', name: 'March of the Machine', released: '2023-04-21' },
+  { code: 'one', name: 'Phyrexia: All Will Be One', released: '2023-02-10' },
+  { code: 'bro', name: 'The Brothers\' War', released: '2022-11-18' },
+  { code: 'dmu', name: 'Dominaria United', released: '2022-09-09' },
+  { code: 'snc', name: 'Streets of New Capenna', released: '2022-04-29' }
+]
+
+export default function NewSetsCombosPage() {
+  const [selectedExpansions, setSelectedExpansions] = useState<number>(3)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisResult, setAnalysisResult] = useState<NewSetsResult | null>(null)
+  const [discoveredCombos, setDiscoveredCombos] = useState<ComboResult[]>([])
+  const [filterType, setFilterType] = useState<'all' | 'internal' | 'cross'>('all')
+  const [showLogs, setShowLogs] = useState(false)
+
+  useEffect(() => {
+    // Carica combo esistenti dalle nuove espansioni al mount
+    loadExistingNewSetsCombos()
+  }, [])
+
+  const loadExistingNewSetsCombos = async () => {
+    try {
+      const response = await fetch('/api/combos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: '',
+          filters: {
+            source: ['new_set_analysis', 'scryfall_aggressive']
+          }
+        })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setDiscoveredCombos(data.combos || [])
+      }
+    } catch (error) {
+      console.error('Error loading existing combos:', error)
+    }
+  }
+
+  const handleAnalyzeNewSets = async () => {
+    setIsAnalyzing(true)
+    setAnalysisResult(null)
+    
+    try {
+      const response = await fetch('/api/admin/analyze-new-sets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminKey: 'user-analysis', // Versione pubblica
+          expansionsCount: selectedExpansions
+        })
+      })
+      
+      const data = await response.json()
+      setAnalysisResult(data)
+      
+      if (data.success) {
+        // Ricarica combo dopo l'analisi
+        await loadExistingNewSetsCombos()
+      }
+      
+    } catch (error) {
+      setAnalysisResult({
+        success: false,
+        message: `Errore di connessione: ${error}`
+      })
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
+  const filteredCombos = discoveredCombos.filter(combo => {
+    if (filterType === 'all') return true
+    if (filterType === 'internal') return combo.source === 'new_set_analysis' && !combo.name.includes('existing')
+    if (filterType === 'cross') return combo.name.includes('existing') || combo.steps.includes('cross')
+    return true
+  })
+
+  const getColorBadgeClass = (colors: string[]) => {
+    if (colors.length === 0) return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+    if (colors.length === 1) {
+      const colorMap: {[key: string]: string} = {
+        'W': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+        'U': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+        'B': 'bg-gray-800/20 text-gray-300 border-gray-500/30',
+        'R': 'bg-red-500/20 text-red-400 border-red-500/30',
+        'G': 'bg-green-500/20 text-green-400 border-green-500/30'
+      }
+      return colorMap[colors[0]] || 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+    }
+    return 'bg-purple-500/20 text-purple-400 border-purple-500/30' // Multi-color
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white">
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <Link href="/" className="inline-flex items-center text-gray-400 hover:text-white mb-4 transition-colors">
+            ← Torna alla Homepage
+          </Link>
+          
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <span className="text-3xl">🔥</span>
+            <h1 className="text-4xl font-bold">Combo delle Nuove Espansioni</h1>
+            <span className="text-3xl">🔥</span>
+          </div>
+          
+          <p className="text-gray-400 max-w-3xl mx-auto">
+            Scopri combo innovative dalle ultime espansioni di Magic. L'AI analizza automaticamente 
+            come le nuove carte si combinano tra loro e con quelle esistenti per creare sinergie mai viste prima.
+          </p>
+        </div>
+
+        {/* Analysis Controls */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-8">
+          <h2 className="text-xl font-semibold mb-4">Configurazione Analisi</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Selezione Espansioni */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Numero di Espansioni da Analizzare
+              </label>
+              <select 
+                value={selectedExpansions}
+                onChange={(e) => setSelectedExpansions(Number(e.target.value))}
+                className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                disabled={isAnalyzing}
+              >
+                <option value={1}>Ultima espansione</option>
+                <option value={2}>Ultime 2 espansioni</option>
+                <option value={3}>Ultime 3 espansioni</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Più espansioni = più combo scoperte
+              </p>
+            </div>
+
+            {/* Ultime Espansioni */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Espansioni Recenti
+              </label>
+              <div className="space-y-1">
+                {RECENT_SETS.slice(0, selectedExpansions).map((set, index) => (
+                  <div key={set.code} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-300">{set.name}</span>
+                    <span className="text-gray-500 text-xs">{set.code.toUpperCase()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Azione */}
+            <div className="flex items-end">
+              <button
+                onClick={handleAnalyzeNewSets}
+                disabled={isAnalyzing}
+                className="w-full bg-gradient-to-r from-red-600 to-orange-600 text-white font-medium py-3 px-6 rounded-lg hover:from-red-700 hover:to-orange-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAnalyzing ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Analizzando...
+                  </div>
+                ) : (
+                  `Analizza ${selectedExpansions} Espansioni`
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Analysis Results */}
+        {analysisResult && (
+          <div className={`rounded-lg p-6 mb-8 ${
+            analysisResult.success 
+              ? 'bg-green-900/30 border border-green-500' 
+              : 'bg-red-900/30 border border-red-500'
+          }`}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">
+                {analysisResult.success ? 'Analisi Completata' : 'Errore nell\'Analisi'}
+              </h3>
+              {analysisResult.log && (
+                <button
+                  onClick={() => setShowLogs(!showLogs)}
+                  className="text-sm text-gray-400 hover:text-white"
+                >
+                  {showLogs ? 'Nascondi Log' : 'Mostra Log'}
+                </button>
+              )}
+            </div>
+            
+            <p className={analysisResult.success ? 'text-green-400' : 'text-red-400'}>
+              {analysisResult.message}
+            </p>
+            
+            {analysisResult.success && analysisResult.stats && (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-orange-400">
+                    {analysisResult.stats.total_combos_created}
+                  </div>
+                  <div className="text-xs text-gray-400">Combo Create</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-400">
+                    {analysisResult.stats.new_cards_analyzed}
+                  </div>
+                  <div className="text-xs text-gray-400">Nuove Carte</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-yellow-400">
+                    {analysisResult.stats.internal_combos}
+                  </div>
+                  <div className="text-xs text-gray-400">Combo Interne</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-cyan-400">
+                    {analysisResult.stats.cross_combos}
+                  </div>
+                  <div className="text-xs text-gray-400">Combo Cross</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-400">
+                    {analysisResult.stats.existing_cards_matched}
+                  </div>
+                  <div className="text-xs text-gray-400">Carte Esistenti</div>
+                </div>
+              </div>
+            )}
+
+            {/* Log Details */}
+            {showLogs && analysisResult.log && (
+              <div className="mt-4 bg-gray-800/50 rounded p-3">
+                <h4 className="text-sm font-medium text-gray-300 mb-2">Log Dettagliato:</h4>
+                <div className="text-xs text-gray-400 space-y-1 max-h-40 overflow-y-auto">
+                  {analysisResult.log.map((logEntry, index) => (
+                    <div key={index}>{logEntry}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Combo Filters */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold mb-2">Combo Scoperte</h2>
+            <p className="text-gray-400">
+              {filteredCombos.length} combo trovate dalle nuove espansioni
+            </p>
+          </div>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFilterType('all')}
+              className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                filterType === 'all' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              Tutte ({discoveredCombos.length})
+            </button>
+            <button
+              onClick={() => setFilterType('internal')}
+              className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                filterType === 'internal' 
+                  ? 'bg-yellow-600 text-white' 
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              Interne
+            </button>
+            <button
+              onClick={() => setFilterType('cross')}
+              className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                filterType === 'cross' 
+                  ? 'bg-cyan-600 text-white' 
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              Cross-Set
+            </button>
+          </div>
+        </div>
+
+        {/* Combo Results Grid */}
+        {filteredCombos.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-4xl mb-4">🔍</div>
+            <h3 className="text-xl font-semibold mb-2">Nessuna combo trovata</h3>
+            <p className="text-gray-400 mb-6">
+              {discoveredCombos.length === 0 
+                ? 'Esegui un\'analisi per scoprire nuove combo dalle espansioni recenti.'
+                : `Nessuna combo ${filterType} trovata. Prova un filtro diverso.`
+              }
+            </p>
+            {discoveredCombos.length === 0 && (
+              <button
+                onClick={handleAnalyzeNewSets}
+                className="bg-gradient-to-r from-red-600 to-orange-600 text-white px-6 py-3 rounded-lg hover:from-red-700 hover:to-orange-700 transition-all"
+              >
+                Inizia Analisi
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredCombos.map((combo) => (
+              <div key={combo.id} className="bg-gray-800 border border-gray-700 rounded-lg p-6 hover:border-gray-600 transition-colors">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg mb-1">{combo.name}</h3>
+                    <p className="text-sm text-gray-400">{combo.result_tag}</p>
+                  </div>
+                  <div className={`px-2 py-1 rounded text-xs border ${getColorBadgeClass(combo.color_identity)}`}>
+                    {combo.color_identity.length === 0 ? 'Colorless' : combo.color_identity.join('')}
+                  </div>
+                </div>
+                
+                <div className="mb-4">
+                  <p className="text-sm text-gray-300 leading-relaxed">
+                    {combo.steps.split('.')[0]}...
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 text-xs rounded ${
+                      combo.source === 'new_set_analysis' 
+                        ? 'bg-orange-500/20 text-orange-400' 
+                        : 'bg-purple-500/20 text-purple-400'
+                    }`}>
+                      {combo.source === 'new_set_analysis' ? 'New Set' : 'AI Pattern'}
+                    </span>
+                  </div>
+                  
+                  <Link href={`/combos/${combo.id}`}>
+                    <button className="text-blue-400 hover:text-blue-300 text-sm transition-colors">
+                      Dettagli →
+                    </button>
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Info Section */}
+        <div className="mt-12 bg-gray-800/50 rounded-lg p-6">
+          <h3 className="text-lg font-semibold mb-3">Come Funziona l'Analisi</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-gray-300">
+            <div>
+              <h4 className="font-medium text-white mb-2">Combo Interne</h4>
+              <p>
+                L'AI analizza le nuove carte all'interno della stessa espansione per trovare 
+                sinergie progettate dai designer, come interazioni tribali o meccaniche innovative.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-medium text-white mb-2">Combo Cross-Set</h4>
+              <p>
+                Le nuove carte vengono confrontate con il database esistente per scoprire 
+                combinazioni mai viste prima che potrebbero rivoluzionare il meta.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
