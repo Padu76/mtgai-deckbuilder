@@ -141,7 +141,7 @@ function analyzeSeedCards(seedCards: SeedCard[]) {
   const manaCurve: Record<string, number> = {}
   const keywordFrequency: Record<string, number> = {}
 
-  seedCards.forEach(seed => {
+  seedCards.forEach((seed: SeedCard) => {
     const card = seed.card
     const quantity = seed.quantity
 
