@@ -2,7 +2,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import DeckEditor from '@/components/DeckEditor'
+import DeckEditor from '../../../components/DeckEditor'
 
 interface Card {
   id: string
