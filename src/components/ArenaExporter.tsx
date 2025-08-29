@@ -1,7 +1,7 @@
 // src/components/ArenaExporter.tsx
 'use client'
 import { useState } from 'react'
-import { DeckCard, ArenaExportOptions, validateDeck, generateDeckStats } from '../lib/arena-export'
+import { DeckCard, ArenaExportOptions, validateDeckInternal, generateDeckStats } from '../lib/arena-export'
 import { useArenaExport } from '../hooks/useArenaExport'
 
 interface ArenaExporterProps {
@@ -46,7 +46,7 @@ export default function ArenaExporter({
   }
 
   const previewText = getExportPreview(deck, sideboard, exportOptions)
-  const validation = validateDeck(deck, format)
+  const validation = validateDeckInternal(deck, format)
   const stats = showStats ? generateDeckStats(deck) : null
 
   return (
