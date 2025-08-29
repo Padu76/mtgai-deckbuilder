@@ -1,5 +1,5 @@
-// src/contexts/DeckWorkspaceContext.tsx
-// Context per gestire il deck workspace globale
+// src/components/DeckWorkspaceContext.tsx
+// Fixed context per gestire il deck workspace globale
 
 'use client'
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
@@ -15,7 +15,7 @@ interface Card {
 
 interface DeckCard extends Card {
   quantity: number
-  source: string // 'combo', 'manual', 'suggestion'
+  source: string
   combo_id?: string
   added_at: number
 }
@@ -54,7 +54,6 @@ function generateId(): string {
 export function DeckWorkspaceProvider({ children }: { children: ReactNode }) {
   const [workspace, setWorkspace] = useState<DeckWorkspace | null>(null)
 
-  // Load workspace from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
@@ -67,7 +66,6 @@ export function DeckWorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Save workspace to localStorage when it changes
   useEffect(() => {
     if (workspace) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace))
@@ -76,7 +74,6 @@ export function DeckWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const addCardsFromCombo = (comboId: string, comboName: string, cards: Card[]) => {
     if (!workspace) {
-      // Create new workspace if none exists
       createNewWorkspace('New Combo Deck', 'historic')
     }
 
@@ -85,16 +82,15 @@ export function DeckWorkspaceProvider({ children }: { children: ReactNode }) {
 
       const now = Date.now()
       const newCards: DeckCard[] = []
+      const updatedCards = [...prev.cards]
       
       cards.forEach(card => {
-        const existingCardIndex = prev.cards.findIndex(c => c.id === card.id)
+        const existingCardIndex = updatedCards.findIndex(c => c.id === card.id)
         
         if (existingCardIndex >= 0) {
-          // Card exists, increase quantity
-          prev.cards[existingCardIndex].quantity = Math.min(4, prev.cards[existingCardIndex].quantity + 1)
-          prev.cards[existingCardIndex].updated_at = now
+          updatedCards[existingCardIndex].quantity = Math.min(4, updatedCards[existingCardIndex].quantity + 1)
+          updatedCards[existingCardIndex].added_at = now
         } else {
-          // New card, add it
           newCards.push({
             ...card,
             quantity: 1,
@@ -107,7 +103,7 @@ export function DeckWorkspaceProvider({ children }: { children: ReactNode }) {
 
       return {
         ...prev,
-        cards: [...prev.cards, ...newCards],
+        cards: updatedCards.concat(newCards),
         updated_at: now
       }
     })
@@ -122,26 +118,26 @@ export function DeckWorkspaceProvider({ children }: { children: ReactNode }) {
       if (!prev) return prev
 
       const now = Date.now()
-      const existingCardIndex = prev.cards.findIndex(c => c.id === card.id)
+      const updatedCards = [...prev.cards]
+      const existingCardIndex = updatedCards.findIndex(c => c.id === card.id)
       
       if (existingCardIndex >= 0) {
-        // Card exists, increase quantity
-        const newQuantity = Math.min(4, prev.cards[existingCardIndex].quantity + quantity)
-        prev.cards[existingCardIndex].quantity = newQuantity
-        prev.cards[existingCardIndex].updated_at = now
+        const newQuantity = Math.min(4, updatedCards[existingCardIndex].quantity + quantity)
+        updatedCards[existingCardIndex].quantity = newQuantity
+        updatedCards[existingCardIndex].added_at = now
       } else {
-        // New card, add it
         const newCard: DeckCard = {
           ...card,
           quantity: Math.min(4, quantity),
           source,
           added_at: now
         }
-        prev.cards.push(newCard)
+        updatedCards.push(newCard)
       }
 
       return {
         ...prev,
+        cards: updatedCards,
         updated_at: now
       }
     })
@@ -163,20 +159,21 @@ export function DeckWorkspaceProvider({ children }: { children: ReactNode }) {
     setWorkspace(prev => {
       if (!prev) return prev
 
-      const cardIndex = prev.cards.findIndex(c => c.id === cardId)
+      const updatedCards = [...prev.cards]
+      const cardIndex = updatedCards.findIndex(c => c.id === cardId)
+      
       if (cardIndex >= 0) {
         if (quantity <= 0) {
-          // Remove card if quantity is 0
-          prev.cards.splice(cardIndex, 1)
+          updatedCards.splice(cardIndex, 1)
         } else {
-          // Update quantity (max 4)
-          prev.cards[cardIndex].quantity = Math.min(4, quantity)
-          prev.cards[cardIndex].updated_at = Date.now()
+          updatedCards[cardIndex].quantity = Math.min(4, quantity)
+          updatedCards[cardIndex].added_at = Date.now()
         }
       }
 
       return {
         ...prev,
+        cards: updatedCards,
         updated_at: Date.now()
       }
     })
@@ -242,11 +239,8 @@ export function DeckWorkspaceProvider({ children }: { children: ReactNode }) {
     }
 
     const lines: string[] = []
-    
-    // Deck header
     lines.push('Deck')
     
-    // Cards grouped by type
     const creatures = workspace.cards.filter(card => 
       card.types?.some(type => type.toLowerCase().includes('creature'))
     )
@@ -260,8 +254,8 @@ export function DeckWorkspaceProvider({ children }: { children: ReactNode }) {
       card.types?.some(type => type.toLowerCase().includes('land'))
     )
 
-    // Format: "4 Card Name (SET) 123"
-    [...creatures, ...spells, ...lands].forEach(card => {
+    const allCards = creatures.concat(spells).concat(lands)
+    allCards.forEach(card => {
       lines.push(`${card.quantity} ${card.name}`)
     })
 
