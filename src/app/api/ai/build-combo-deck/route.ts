@@ -356,7 +356,7 @@ export async function POST(request: NextRequest) {
       format,
       bo_mode: 'bo1',
       name: `AI ${format.charAt(0).toUpperCase() + format.slice(1)} Combo Deck - ${colors.join('')}`,
-      notes: `Generated from ${selected_combos.length} combo(s): ${selected_combos.map(c => c.description).join(', ')}`,
+      notes: `Generated from ${selected_combos.length} combo(s): ${selected_combos.map((c: ComboSuggestion) => c.description).join(', ')}`,
       is_public: false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -393,7 +393,7 @@ export async function POST(request: NextRequest) {
           total_cards: finalCardCount,
           format: format,
           colors: colors,
-          combo_descriptions: selected_combos.map(c => c.description)
+          combo_descriptions: selected_combos.map((c: ComboSuggestion) => c.description)
         })
       }
     } catch (dbError) {
@@ -409,7 +409,7 @@ export async function POST(request: NextRequest) {
       total_cards: finalCardCount,
       format: format,
       colors: colors,
-      combo_descriptions: selected_combos.map(c => c.description),
+      combo_descriptions: selected_combos.map((c: ComboSuggestion) => c.description),
       message: 'Deck generated successfully (database save failed)'
     })
 
