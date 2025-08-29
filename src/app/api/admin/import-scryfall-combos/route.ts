@@ -1,5 +1,5 @@
 // src/app/api/admin/import-scryfall-combos/route.ts
-// Scryfall integration per estrarre combo dai tag e annotazioni delle carte Arena
+// Fixed Scryfall integration con controlli di sicurezza per proprietà undefined
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
@@ -20,6 +20,43 @@ function generateUUID(): string {
     const v = c == 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
+}
+
+// Controllo sicurezza per proprietà carte
+function isValidCard(card: any): card is ScryFallCard {
+  return (
+    card &&
+    typeof card.id === 'string' &&
+    typeof card.name === 'string' &&
+    typeof card.oracle_text === 'string' &&
+    typeof card.type_line === 'string' &&
+    card.legalities &&
+    typeof card.legalities === 'object'
+  )
+}
+
+// Safe accessor per testo oracle
+function getSafeOracleText(card: any): string {
+  if (!card || typeof card.oracle_text !== 'string') {
+    return ''
+  }
+  return card.oracle_text
+}
+
+// Safe accessor per type line
+function getSafeTypeLine(card: any): string {
+  if (!card || typeof card.type_line !== 'string') {
+    return ''
+  }
+  return card.type_line
+}
+
+// Safe accessor per nome carta
+function getSafeName(card: any): string {
+  if (!card || typeof card.name !== 'string') {
+    return 'Unknown Card'
+  }
+  return card.name
 }
 
 // Carte con combo noti che cercare su Scryfall per relazioni
@@ -46,48 +83,30 @@ const COMBO_SEED_CARDS = [
   'Collected Company'
 ]
 
-// Keywords che indicano potential combo nelle carte
-const COMBO_KEYWORDS = [
-  'infinite',
-  'combo',
-  'synergy',
-  'interaction',
-  'engine',
-  'loop',
-  'chain',
-  'storm',
-  'goes infinite',
-  'wins the game',
-  'alternate win condition',
-  'untap',
-  'enters the battlefield',
-  'dies',
-  'sacrifice'
-]
-
 interface ScryFallCard {
   id: string
   name: string
-  mana_cost: string
-  cmc: number
-  colors: string[]
-  color_identity: string[]
+  mana_cost?: string
+  cmc?: number
+  colors?: string[]
+  color_identity?: string[]
   type_line: string
   oracle_text: string
   legalities: {
-    standard: string
-    historic: string
-    brawl: string
+    standard?: string
+    historic?: string
+    brawl?: string
   }
-  set: string
-  rarity: string
+  set?: string
+  rarity?: string
   image_uris?: {
-    normal: string
-    small: string
+    normal?: string
+    small?: string
   }
   keywords?: string[]
   produced_mana?: string[]
   arena_id?: number
+  games?: string[]
 }
 
 interface ImportResult {
@@ -129,9 +148,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<ImportRes
     const arenaCards = await fetchArenaCardsFromScryfall(log, maxCards)
     log.push(`Fetched ${arenaCards.length} Arena cards from Scryfall`)
 
-    // Step 2: Analyze for combo patterns
+    // Step 2: Analyze for combo patterns (con controlli di sicurezza)
     log.push('Analyzing cards for combo patterns...')
-    const comboPatterns = analyzeComboPatterns(arenaCards, log)
+    const comboPatterns = analyzeComboPatterns(arenaCards, log, errors)
     log.push(`Found ${comboPatterns.length} potential combo patterns`)
 
     // Step 3: Create combos in database
@@ -180,7 +199,7 @@ async function fetchArenaCardsFromScryfall(log: string[], maxCards: number): Pro
   let page = 1
   
   try {
-    // Query Scryfall for Arena cards with combo-relevant text
+    // Query Scryfall per carte Arena con testo combo-relevant
     const comboQuery = `game:arena (oracle:"infinite" OR oracle:"combo" OR oracle:"enters the battlefield" OR oracle:"dies" OR oracle:"sacrifice" OR oracle:"untap")`
     
     while (allCards.length < maxCards) {
@@ -209,12 +228,23 @@ async function fetchArenaCardsFromScryfall(log: string[], maxCards: number): Pro
         break
       }
       
-      // Filter for Arena-available cards
-      const arenaCards = data.data.filter((card: any) => 
-        card.games && card.games.includes('arena') &&
-        (card.legalities.historic === 'legal' || card.legalities.standard === 'legal')
-      )
+      // Filter for valid Arena cards con controlli di sicurezza
+      const arenaCards = data.data.filter((card: any) => {
+        if (!isValidCard(card)) {
+          log.push(`Skipped invalid card: ${getSafeName(card)}`)
+          return false
+        }
+        
+        const hasArenaGame = card.games && Array.isArray(card.games) && card.games.includes('arena')
+        const isLegal = (
+          (card.legalities.historic && card.legalities.historic === 'legal') ||
+          (card.legalities.standard && card.legalities.standard === 'legal')
+        )
+        
+        return hasArenaGame && isLegal
+      })
       
+      log.push(`Filtered ${arenaCards.length} valid Arena cards from page ${page}`)
       allCards.push(...arenaCards)
       
       if (!data.has_more) {
@@ -243,13 +273,14 @@ async function fetchArenaCardsFromScryfall(log: string[], maxCards: number): Pro
         const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cardName)}`)
         if (response.ok) {
           const card = await response.json()
-          if (card.games && card.games.includes('arena')) {
+          if (isValidCard(card) && card.games && card.games.includes('arena')) {
             allCards.push(card)
+            log.push(`Added fallback card: ${card.name}`)
           }
         }
         await new Promise(resolve => setTimeout(resolve, 100))
-      } catch {
-        // Skip cards that can't be found
+      } catch (err) {
+        log.push(`Failed to fetch ${cardName}: ${(err as Error).message}`)
       }
     }
   }
@@ -257,64 +288,108 @@ async function fetchArenaCardsFromScryfall(log: string[], maxCards: number): Pro
   return allCards.slice(0, maxCards)
 }
 
-function analyzeComboPatterns(cards: ScryFallCard[], log: string[]): ComboPattern[] {
+function analyzeComboPatterns(cards: ScryFallCard[], log: string[], errors: string[]): ComboPattern[] {
   const patterns: ComboPattern[] = []
   
-  // Look for known combo pairs
-  const knownPairs = [
-    ['Heliod, Sun-Crowned', 'Walking Ballista'],
-    ['Saheeli Rai', 'Felidar Guardian'], 
-    ['Cauldron Familiar', 'Witch\'s Oven'],
-    ['Kinnan, Bonder Prodigy', 'Basalt Monolith'],
-    ['Karn, the Great Creator', 'Mycosynth Lattice']
-  ]
-  
-  for (const [card1Name, card2Name] of knownPairs) {
-    const card1 = cards.find(c => c.name === card1Name)
-    const card2 = cards.find(c => c.name === card2Name)
+  try {
+    log.push(`Starting pattern analysis on ${cards.length} valid cards`)
     
-    if (card1 && card2) {
-      patterns.push({
-        cards: [card1, card2],
-        type: 'known_combo',
-        confidence: 0.9,
-        description: `${card1Name} + ${card2Name} combo`
-      })
-    }
-  }
-  
-  // Look for cards with infinite potential
-  const infiniteCards = cards.filter(card => 
-    card.oracle_text.toLowerCase().includes('infinite') ||
-    card.oracle_text.toLowerCase().includes('any number of times')
-  )
-  
-  for (const infiniteCard of infiniteCards) {
-    // Find enablers for infinite cards
-    const enablers = cards.filter(card => 
-      card.id !== infiniteCard.id &&
-      (card.oracle_text.toLowerCase().includes('untap') ||
-       card.oracle_text.toLowerCase().includes('return') ||
-       card.oracle_text.toLowerCase().includes('enters the battlefield'))
-    )
+    // Look for known combo pairs
+    const knownPairs = [
+      ['Heliod, Sun-Crowned', 'Walking Ballista'],
+      ['Saheeli Rai', 'Felidar Guardian'], 
+      ['Cauldron Familiar', 'Witch\'s Oven'],
+      ['Kinnan, Bonder Prodigy', 'Basalt Monolith'],
+      ['Karn, the Great Creator', 'Mycosynth Lattice']
+    ]
     
-    for (const enabler of enablers.slice(0, 3)) { // Limit to avoid too many combinations
-      if (hasComboSynergy(infiniteCard, enabler)) {
-        patterns.push({
-          cards: [infiniteCard, enabler],
-          type: 'infinite_synergy',
-          confidence: 0.6,
-          description: `${infiniteCard.name} synergy with ${enabler.name}`
-        })
+    for (const [card1Name, card2Name] of knownPairs) {
+      try {
+        const card1 = cards.find(c => getSafeName(c) === card1Name)
+        const card2 = cards.find(c => getSafeName(c) === card2Name)
+        
+        if (card1 && card2) {
+          patterns.push({
+            cards: [card1, card2],
+            type: 'known_combo',
+            confidence: 0.9,
+            description: `${card1Name} + ${card2Name} combo`
+          })
+          log.push(`Found known combo: ${card1Name} + ${card2Name}`)
+        }
+      } catch (err) {
+        errors.push(`Error analyzing known pair ${card1Name}/${card2Name}: ${(err as Error).message}`)
       }
     }
+    
+    // Look for cards with infinite potential (con controlli sicurezza)
+    const infiniteCards = cards.filter(card => {
+      try {
+        const oracleText = getSafeOracleText(card).toLowerCase()
+        return (
+          oracleText.includes('infinite') ||
+          oracleText.includes('any number of times')
+        )
+      } catch (err) {
+        errors.push(`Error checking infinite text for ${getSafeName(card)}: ${(err as Error).message}`)
+        return false
+      }
+    })
+    
+    log.push(`Found ${infiniteCards.length} cards with infinite potential`)
+    
+    for (const infiniteCard of infiniteCards) {
+      try {
+        // Find enablers for infinite cards
+        const enablers = cards.filter(card => {
+          try {
+            if (card.id === infiniteCard.id) return false
+            
+            const oracleText = getSafeOracleText(card).toLowerCase()
+            return (
+              oracleText.includes('untap') ||
+              oracleText.includes('return') ||
+              oracleText.includes('enters the battlefield')
+            )
+          } catch (err) {
+            errors.push(`Error checking enabler for ${getSafeName(card)}: ${(err as Error).message}`)
+            return false
+          }
+        })
+        
+        for (const enabler of enablers.slice(0, 3)) { // Limit to avoid too many combinations
+          try {
+            if (hasComboSynergy(infiniteCard, enabler, errors)) {
+              patterns.push({
+                cards: [infiniteCard, enabler],
+                type: 'infinite_synergy',
+                confidence: 0.6,
+                description: `${getSafeName(infiniteCard)} synergy with ${getSafeName(enabler)}`
+              })
+            }
+          } catch (err) {
+            errors.push(`Error creating synergy pattern: ${(err as Error).message}`)
+          }
+        }
+      } catch (err) {
+        errors.push(`Error processing infinite card ${getSafeName(infiniteCard)}: ${(err as Error).message}`)
+      }
+    }
+    
+    // Look for tribal/thematic synergies
+    try {
+      const tribalSynergies = findTribalSynergies(cards, log, errors)
+      patterns.push(...tribalSynergies)
+    } catch (err) {
+      errors.push(`Error finding tribal synergies: ${(err as Error).message}`)
+    }
+    
+    log.push(`Pattern analysis complete: ${patterns.length} patterns found`)
+    
+  } catch (err) {
+    errors.push(`Critical error in pattern analysis: ${(err as Error).message}`)
+    log.push(`Pattern analysis failed with critical error`)
   }
-  
-  // Look for tribal/thematic synergies
-  const tribalSynergies = findTribalSynergies(cards)
-  patterns.push(...tribalSynergies)
-  
-  log.push(`Analyzed ${cards.length} cards, found ${patterns.length} combo patterns`)
   
   return patterns.filter(p => p.confidence > 0.5).slice(0, 50) // Keep only confident patterns
 }
@@ -326,66 +401,105 @@ interface ComboPattern {
   description: string
 }
 
-function hasComboSynergy(card1: ScryFallCard, card2: ScryFallCard): boolean {
-  const text1 = card1.oracle_text.toLowerCase()
-  const text2 = card2.oracle_text.toLowerCase()
-  
-  // Check for keyword interactions
-  const interactions = [
-    ['artifact', 'artifact'],
-    ['creature', 'enters the battlefield'],
-    ['sacrifice', 'dies'],
-    ['untap', 'tap'],
-    ['counter', 'counter'],
-    ['draw', 'discard'],
-    ['life', 'damage']
-  ]
-  
-  for (const [keyword1, keyword2] of interactions) {
-    if (text1.includes(keyword1) && text2.includes(keyword2)) {
-      return true
-    }
-  }
-  
-  return false
-}
-
-function findTribalSynergies(cards: ScryFallCard[]): ComboPattern[] {
-  const patterns: ComboPattern[] = []
-  
-  const tribes = ['goblin', 'elf', 'vampire', 'zombie', 'angel', 'dragon']
-  
-  for (const tribe of tribes) {
-    const tribalCards = cards.filter(card => 
-      card.type_line.toLowerCase().includes(tribe) ||
-      card.oracle_text.toLowerCase().includes(tribe)
-    )
+function hasComboSynergy(card1: ScryFallCard, card2: ScryFallCard, errors: string[]): boolean {
+  try {
+    const text1 = getSafeOracleText(card1).toLowerCase()
+    const text2 = getSafeOracleText(card2).toLowerCase()
     
-    if (tribalCards.length >= 2) {
-      // Create tribal combo pattern
-      const lordCards = tribalCards.filter(card => 
-        card.oracle_text.toLowerCase().includes('other ' + tribe) ||
-        card.oracle_text.toLowerCase().includes(tribe + 's get')
-      )
-      
-      const tokenCards = tribalCards.filter(card =>
-        card.oracle_text.toLowerCase().includes('create') &&
-        card.oracle_text.toLowerCase().includes(tribe)
-      )
-      
-      for (const lord of lordCards) {
-        for (const tokenMaker of tokenCards) {
-          if (lord.id !== tokenMaker.id) {
-            patterns.push({
-              cards: [lord, tokenMaker],
-              type: 'tribal_synergy',
-              confidence: 0.7,
-              description: `${tribe.charAt(0).toUpperCase() + tribe.slice(1)} tribal synergy`
-            })
-          }
-        }
+    // Check for keyword interactions
+    const interactions = [
+      ['artifact', 'artifact'],
+      ['creature', 'enters the battlefield'],
+      ['sacrifice', 'dies'],
+      ['untap', 'tap'],
+      ['counter', 'counter'],
+      ['draw', 'discard'],
+      ['life', 'damage']
+    ]
+    
+    for (const [keyword1, keyword2] of interactions) {
+      if (text1.includes(keyword1) && text2.includes(keyword2)) {
+        return true
       }
     }
+    
+    return false
+  } catch (err) {
+    errors.push(`Error checking synergy between ${getSafeName(card1)} and ${getSafeName(card2)}: ${(err as Error).message}`)
+    return false
+  }
+}
+
+function findTribalSynergies(cards: ScryFallCard[], log: string[], errors: string[]): ComboPattern[] {
+  const patterns: ComboPattern[] = []
+  
+  try {
+    const tribes = ['goblin', 'elf', 'vampire', 'zombie', 'angel', 'dragon']
+    
+    for (const tribe of tribes) {
+      try {
+        const tribalCards = cards.filter(card => {
+          try {
+            const typeLine = getSafeTypeLine(card).toLowerCase()
+            const oracleText = getSafeOracleText(card).toLowerCase()
+            return (
+              typeLine.includes(tribe) ||
+              oracleText.includes(tribe)
+            )
+          } catch (err) {
+            errors.push(`Error filtering ${tribe} for ${getSafeName(card)}: ${(err as Error).message}`)
+            return false
+          }
+        })
+        
+        if (tribalCards.length >= 2) {
+          // Create tribal combo pattern
+          const lordCards = tribalCards.filter(card => {
+            try {
+              const oracleText = getSafeOracleText(card).toLowerCase()
+              return (
+                oracleText.includes('other ' + tribe) ||
+                oracleText.includes(tribe + 's get')
+              )
+            } catch (err) {
+              return false
+            }
+          })
+          
+          const tokenCards = tribalCards.filter(card => {
+            try {
+              const oracleText = getSafeOracleText(card).toLowerCase()
+              return (
+                oracleText.includes('create') &&
+                oracleText.includes(tribe)
+              )
+            } catch (err) {
+              return false
+            }
+          })
+          
+          for (const lord of lordCards) {
+            for (const tokenMaker of tokenCards) {
+              if (lord.id !== tokenMaker.id) {
+                patterns.push({
+                  cards: [lord, tokenMaker],
+                  type: 'tribal_synergy',
+                  confidence: 0.7,
+                  description: `${tribe.charAt(0).toUpperCase() + tribe.slice(1)} tribal synergy`
+                })
+              }
+            }
+          }
+        }
+      } catch (err) {
+        errors.push(`Error processing ${tribe} tribal synergies: ${(err as Error).message}`)
+      }
+    }
+    
+    log.push(`Found ${patterns.length} tribal synergy patterns`)
+    
+  } catch (err) {
+    errors.push(`Critical error in tribal synergy analysis: ${(err as Error).message}`)
   }
   
   return patterns
@@ -402,7 +516,13 @@ async function createCombosFromPatterns(
   for (const pattern of patterns) {
     try {
       // Check if combo already exists
-      const cardNames = pattern.cards.map(c => c.name)
+      const cardNames = pattern.cards.map(c => getSafeName(c))
+      
+      if (cardNames.some(name => !name || name === 'Unknown Card')) {
+        errors.push(`Skipped pattern with invalid card names: ${cardNames.join(', ')}`)
+        continue
+      }
+      
       const { data: existingCombo } = await supabase
         .from('combos')
         .select('id')
@@ -439,7 +559,7 @@ async function createCombosFromPatterns(
       const cardIds: string[] = []
       
       for (const card of pattern.cards) {
-        const cardId = await findOrCreateCardFromScryfall(supabase, card, log)
+        const cardId = await findOrCreateCardFromScryfall(supabase, card, log, errors)
         if (cardId) {
           cardIds.push(cardId)
         }
@@ -453,7 +573,7 @@ async function createCombosFromPatterns(
         
         await supabase.from('combo_cards').insert(comboCardRows)
         combosCreated++
-        log.push(`✓ Created: ${comboName}`)
+        log.push(`Created: ${comboName}`)
       }
       
     } catch (error) {
@@ -473,10 +593,14 @@ async function updateExistingCards(
   
   for (const scryfallCard of scryfallCards.slice(0, 50)) { // Limit to avoid timeout
     try {
+      if (!isValidCard(scryfallCard)) {
+        continue
+      }
+      
       const { data: existingCard } = await supabase
         .from('cards')
         .select('id, name, oracle_text')
-        .ilike('name', scryfallCard.name)
+        .ilike('name', getSafeName(scryfallCard))
         .limit(1)
       
       if (existingCard && existingCard.length > 0) {
@@ -489,11 +613,11 @@ async function updateExistingCards(
             .update({
               scryfall_id: scryfallCard.id,
               oracle_text: scryfallCard.oracle_text,
-              mana_value: scryfallCard.cmc,
-              mana_cost: scryfallCard.mana_cost,
-              colors: scryfallCard.colors,
-              color_identity: scryfallCard.color_identity,
-              types: scryfallCard.type_line.split(' — '),
+              mana_value: scryfallCard.cmc || 0,
+              mana_cost: scryfallCard.mana_cost || '',
+              colors: scryfallCard.colors || [],
+              color_identity: scryfallCard.color_identity || [],
+              types: getSafeTypeLine(scryfallCard).split(' — ').filter(t => t.trim()),
               image_url: scryfallCard.image_uris?.normal || '',
               tags: ['scryfall_updated', 'combo_card']
             })
@@ -516,14 +640,20 @@ async function updateExistingCards(
 async function findOrCreateCardFromScryfall(
   supabase: any,
   scryfallCard: ScryFallCard,
-  log: string[]
+  log: string[],
+  errors: string[]
 ): Promise<string | null> {
   try {
+    if (!isValidCard(scryfallCard)) {
+      errors.push(`Invalid card data for: ${getSafeName(scryfallCard)}`)
+      return null
+    }
+    
     // Try to find existing card
     const { data: existingCards } = await supabase
       .from('cards')
       .select('id')
-      .ilike('name', scryfallCard.name)
+      .ilike('name', getSafeName(scryfallCard))
       .limit(1)
     
     if (existingCards && existingCards.length > 0) {
@@ -538,16 +668,16 @@ async function findOrCreateCardFromScryfall(
       .insert({
         id: cardId,
         scryfall_id: scryfallCard.id,
-        name: scryfallCard.name,
-        mana_value: scryfallCard.cmc,
-        mana_cost: scryfallCard.mana_cost,
-        colors: scryfallCard.colors,
-        color_identity: scryfallCard.color_identity,
-        types: scryfallCard.type_line.split(' — '),
-        oracle_text: scryfallCard.oracle_text,
-        legal_standard: scryfallCard.legalities.standard === 'legal',
-        legal_historic: scryfallCard.legalities.historic === 'legal',
-        legal_brawl: scryfallCard.legalities.brawl === 'legal',
+        name: getSafeName(scryfallCard),
+        mana_value: scryfallCard.cmc || 0,
+        mana_cost: scryfallCard.mana_cost || '',
+        colors: scryfallCard.colors || [],
+        color_identity: scryfallCard.color_identity || [],
+        types: getSafeTypeLine(scryfallCard).split(' — ').filter(t => t.trim()),
+        oracle_text: getSafeOracleText(scryfallCard),
+        legal_standard: scryfallCard.legalities?.standard === 'legal',
+        legal_historic: scryfallCard.legalities?.historic === 'legal',
+        legal_brawl: scryfallCard.legalities?.brawl === 'legal',
         in_arena: true,
         image_url: scryfallCard.image_uris?.normal || '',
         tags: ['scryfall_import', 'combo_card']
@@ -556,13 +686,14 @@ async function findOrCreateCardFromScryfall(
       .single()
     
     if (insertError) {
-      log.push(`Error creating card ${scryfallCard.name}: ${insertError.message}`)
+      errors.push(`Error creating card ${getSafeName(scryfallCard)}: ${insertError.message}`)
       return null
     }
     
     return cardId
     
   } catch (error) {
+    errors.push(`Error processing card ${getSafeName(scryfallCard)}: ${(error as Error).message}`)
     return null
   }
 }
@@ -571,8 +702,15 @@ function getComboColors(cards: ScryFallCard[]): string[] {
   const allColors = new Set<string>()
   
   for (const card of cards) {
-    for (const color of card.color_identity || []) {
-      allColors.add(color)
+    try {
+      const colors = card.color_identity || []
+      for (const color of colors) {
+        if (typeof color === 'string') {
+          allColors.add(color)
+        }
+      }
+    } catch (err) {
+      // Skip cards with invalid color data
     }
   }
   
@@ -580,7 +718,7 @@ function getComboColors(cards: ScryFallCard[]): string[] {
 }
 
 function generateComboSteps(pattern: ComboPattern): string {
-  const cardNames = pattern.cards.map(c => c.name)
+  const cardNames = pattern.cards.map(c => getSafeName(c))
   
   switch (pattern.type) {
     case 'known_combo':
