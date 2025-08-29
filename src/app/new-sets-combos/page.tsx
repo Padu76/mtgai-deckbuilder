@@ -1,9 +1,10 @@
 // src/app/new-sets-combos/page.tsx
-// Pagina con caricamento dinamico delle espansioni recenti da Scryfall
+// Pagina con pulsanti Add to Deck e integrazione workspace
 
 'use client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useDeckWorkspace } from '../../components/DeckWorkspaceContext'
 
 interface RecentSet {
   code: string
@@ -36,8 +37,12 @@ interface ComboResult {
   color_identity: string[]
   source: string
   cards?: {
+    id: string
     name: string
     image_url?: string
+    mana_cost?: string
+    types?: string[]
+    colors?: string[]
     set?: string
   }[]
 }
@@ -51,6 +56,9 @@ export default function NewSetsCombosPage() {
   const [discoveredCombos, setDiscoveredCombos] = useState<ComboResult[]>([])
   const [filterType, setFilterType] = useState<'all' | 'internal' | 'cross'>('all')
   const [showLogs, setShowLogs] = useState(false)
+  const [addedCombos, setAddedCombos] = useState<Set<string>>(new Set())
+
+  const { addCardsFromCombo, workspace, isWorkspaceEmpty, getCardStats } = useDeckWorkspace()
 
   useEffect(() => {
     loadRecentSets()
@@ -71,7 +79,6 @@ export default function NewSetsCombosPage() {
       const data = await response.json()
       const today = new Date()
       
-      // Filtra per expansion sets già rilasciati (non futuri) negli ultimi 3 anni
       const threeYearsAgo = new Date()
       threeYearsAgo.setFullYear(today.getFullYear() - 3)
       
@@ -80,17 +87,16 @@ export default function NewSetsCombosPage() {
           const releaseDate = new Date(set.released_at)
           return set.set_type === 'expansion' && 
                  releaseDate >= threeYearsAgo && 
-                 releaseDate <= today // Solo set già rilasciati, non futuri
+                 releaseDate <= today
         })
         .sort((a: any, b: any) => 
           new Date(b.released_at).getTime() - new Date(a.released_at).getTime()
         )
-        .slice(0, 10) // Prime 10 espansioni più recenti già rilasciate
+        .slice(0, 10)
       
       setRecentSets(expansionSets)
     } catch (error) {
       console.error('Error loading recent sets:', error)
-      // Fallback con alcuni set noti recenti se l'API fallisce
       setRecentSets([
         { code: 'otj', name: 'Outlaws of Thunder Junction', released_at: '2024-04-19', set_type: 'expansion' },
         { code: 'mkm', name: 'Murders at Karlov Manor', released_at: '2024-02-09', set_type: 'expansion' },
@@ -134,7 +140,7 @@ export default function NewSetsCombosPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          adminKey: process.env.NEXT_PUBLIC_ADMIN_KEY, // Usa chiave admin reale
+          adminKey: process.env.NEXT_PUBLIC_ADMIN_KEY,
           expansionsCount: selectedExpansions
         })
       })
@@ -143,7 +149,6 @@ export default function NewSetsCombosPage() {
       setAnalysisResult(data)
       
       if (data.success) {
-        // Ricarica combo dopo l'analisi
         await loadExistingNewSetsCombos()
       }
       
@@ -155,6 +160,31 @@ export default function NewSetsCombosPage() {
     } finally {
       setIsAnalyzing(false)
     }
+  }
+
+  const handleAddComboToDeck = (combo: ComboResult) => {
+    if (!combo.cards || combo.cards.length === 0) return
+    
+    const cards = combo.cards.map(card => ({
+      id: card.id,
+      name: card.name,
+      mana_cost: card.mana_cost,
+      types: card.types,
+      image_url: card.image_url,
+      colors: card.colors
+    }))
+    
+    addCardsFromCombo(combo.id, combo.name, cards)
+    setAddedCombos(prev => new Set(prev).add(combo.id))
+    
+    // Remove from added set after 3 seconds to allow re-adding
+    setTimeout(() => {
+      setAddedCombos(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(combo.id)
+        return newSet
+      })
+    }, 3000)
   }
 
   const filteredCombos = discoveredCombos.filter(combo => {
@@ -176,7 +206,7 @@ export default function NewSetsCombosPage() {
       }
       return colorMap[colors[0]] || 'bg-gray-500/20 text-gray-400 border-gray-500/30'
     }
-    return 'bg-purple-500/20 text-purple-400 border-purple-500/30' // Multi-color
+    return 'bg-purple-500/20 text-purple-400 border-purple-500/30'
   }
 
   const formatDate = (dateString: string) => {
@@ -187,10 +217,12 @@ export default function NewSetsCombosPage() {
     })
   }
 
+  const cardStats = getCardStats()
+
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
+        {/* Header with Workspace Info */}
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center text-gray-400 hover:text-white mb-4 transition-colors">
             ← Torna alla Homepage
@@ -202,10 +234,19 @@ export default function NewSetsCombosPage() {
             <span className="text-3xl">🔥</span>
           </div>
           
-          <p className="text-gray-400 max-w-3xl mx-auto">
+          <p className="text-gray-400 max-w-3xl mx-auto mb-4">
             Scopri combo innovative dalle ultime espansioni di Magic. L'AI analizza automaticamente 
             come le nuove carte si combinano tra loro e con quelle esistenti per creare sinergie mai viste prima.
           </p>
+
+          {/* Workspace Status */}
+          {!isWorkspaceEmpty && (
+            <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3 max-w-md mx-auto">
+              <p className="text-green-400 text-sm">
+                Deck Workspace: <span className="font-bold">{workspace?.name}</span> - {cardStats.total} carte
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Analysis Controls */}
@@ -213,7 +254,6 @@ export default function NewSetsCombosPage() {
           <h2 className="text-xl font-semibold mb-4">Configurazione Analisi</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Selezione Espansioni */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Numero di Espansioni da Analizzare
@@ -230,12 +270,8 @@ export default function NewSetsCombosPage() {
                 <option value={4}>Ultime 4 espansioni</option>
                 <option value={5}>Ultime 5 espansioni</option>
               </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Più espansioni = più combo scoperte
-              </p>
             </div>
 
-            {/* Espansioni Recenti Dinamiche */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Espansioni da Analizzare
@@ -264,7 +300,6 @@ export default function NewSetsCombosPage() {
               )}
             </div>
 
-            {/* Azione */}
             <div className="flex items-end">
               <button
                 onClick={handleAnalyzeNewSets}
@@ -283,7 +318,6 @@ export default function NewSetsCombosPage() {
             </div>
           </div>
 
-          {/* Sets Info */}
           {!isLoadingSets && recentSets.length > 0 && (
             <div className="mt-4 p-3 bg-gray-700/30 rounded">
               <p className="text-sm text-gray-400">
@@ -368,7 +402,6 @@ export default function NewSetsCombosPage() {
               </div>
             )}
 
-            {/* Log Details */}
             {showLogs && analysisResult.log && (
               <div className="mt-4 bg-gray-800/50 rounded p-3">
                 <h4 className="text-sm font-medium text-gray-300 mb-2">Log Dettagliato:</h4>
@@ -464,9 +497,21 @@ export default function NewSetsCombosPage() {
                   <p className="text-sm text-gray-300 leading-relaxed">
                     {combo.steps.split('.')[0]}...
                   </p>
+                  {combo.cards && combo.cards.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-gray-500 mb-1">{combo.cards.length} carte:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {combo.cards.map(card => (
+                          <span key={card.id} className="text-xs bg-gray-700 px-2 py-1 rounded">
+                            {card.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className={`px-2 py-1 text-xs rounded ${
                       combo.source === 'new_set_analysis' 
@@ -477,11 +522,25 @@ export default function NewSetsCombosPage() {
                     </span>
                   </div>
                   
-                  <Link href={`/combos/${combo.id}`}>
-                    <button className="text-blue-400 hover:text-blue-300 text-sm transition-colors">
-                      Dettagli →
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => handleAddComboToDeck(combo)}
+                      disabled={!combo.cards || combo.cards.length === 0}
+                      className={`px-3 py-1 text-xs rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                        addedCombos.has(combo.id)
+                          ? 'bg-green-600 text-white'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {addedCombos.has(combo.id) ? 'Aggiunta!' : 'Add to Deck'}
                     </button>
-                  </Link>
+                    
+                    <Link href={`/combos/${combo.id}`}>
+                      <button className="text-blue-400 hover:text-blue-300 text-xs transition-colors px-2 py-1 border border-blue-400/30 rounded hover:border-blue-300/50">
+                        Dettagli
+                      </button>
+                    </Link>
+                  </div>
                 </div>
               </div>
             ))}
