@@ -7,12 +7,20 @@ import CardPreview from '../../components/CardPreview'
 interface Card {
   id: string
   name: string
-  mana_cost: string
-  mana_value: number
-  colors: string[]
-  oracle_text: string
-  image_url?: string
-  rarity: string
+  mana_cost?: string
+  mana_value?: number
+  colors?: string[]
+  color_identity?: string[]
+  types?: string[]
+  oracle_text?: string
+  image_uris?: {
+    small?: string
+    normal?: string
+    large?: string
+  } | null
+  image_url?: string | null
+  rarity?: string
+  set_code?: string
 }
 
 interface ComboSuggestion {
@@ -21,12 +29,31 @@ interface ComboSuggestion {
   category: string
   type: 'infinite' | 'synergy' | 'win_condition' | 'value_engine'
   description: string
-  steps: string[]
+  steps?: string[]
   reliability: 'high' | 'medium' | 'low'
-  setup_turns: number
-  mana_cost_total: number
+  setup_turns?: number
+  mana_cost_total?: number
   power_level: number
 }
+
+interface CreativeCombo {
+  id: string
+  cards: Card[]
+  category: string
+  creativity_score: number
+  obscurity_level: 'rare' | 'obscure' | 'hidden' | 'unknown'
+  description: string
+  explanation: string[]
+  setup_steps: string[]
+  timing_requirements: string[]
+  rules_interactions: string[]
+  power_level: number
+  consistency: number
+  discovery_method: string
+  format_legal: string[]
+}
+
+type CombinedCombo = ComboSuggestion | (CreativeCombo & { type: 'creative' })
 
 export default function ComboBuilderPage() {
   const router = useRouter()
@@ -39,11 +66,14 @@ export default function ComboBuilderPage() {
     categories: [] as string[],
     power_level_min: 5,
     max_setup_turns: 5,
-    max_cards_per_combo: 4
+    max_cards_per_combo: 4,
+    creative_mode: false,
+    creativity_level: 'high' as 'low' | 'medium' | 'high',
+    include_obscure_cards: true
   })
   
-  const [availableCombos, setAvailableCombos] = useState<ComboSuggestion[]>([])
-  const [selectedCombos, setSelectedCombos] = useState<ComboSuggestion[]>([])
+  const [availableCombos, setAvailableCombos] = useState<CombinedCombo[]>([])
+  const [selectedCombos, setSelectedCombos] = useState<CombinedCombo[]>([])
   const [categories, setCategories] = useState<any>({})
 
   const colorOptions = [
@@ -63,6 +93,15 @@ export default function ComboBuilderPage() {
     { key: 'draw_damage', name: 'Danni da Pescaggio', icon: '📚', description: 'Mill + punish' },
     { key: 'lock_stax', name: 'Lock/Controllo', icon: '🔒', description: 'Impedisce azioni avversario' },
     { key: 'value_engine', name: 'Motore Valore', icon: '📈', description: 'Vantaggio carte continuativo' }
+  ]
+
+  const creativeCategories = [
+    { key: 'alternative_cost_exploitation', name: 'Exploit Costi Alt.', icon: '🔄', description: 'Manipola costi alternativi' },
+    { key: 'replacement_effect_loop', name: 'Loop Sostituzione', icon: '🔁', description: 'Chain effetti sostituzione' },
+    { key: 'resource_multiplication', name: 'Moltiplicatori', icon: '✖️', description: 'Moltiplica risorse' },
+    { key: 'timing_window_exploitation', name: 'Exploit Timing', icon: '⏱️', description: 'Sfrutta finestre temporali' },
+    { key: 'state_based_manipulation', name: 'Manipola Stati', icon: '🎛️', description: 'Controlla state-based actions' },
+    { key: 'cross_mechanical_synergy', name: 'Sinergie Cross', icon: '🔗', description: 'Mix meccaniche diverse' }
   ]
 
   const toggleColor = (color: string) => {
@@ -91,39 +130,68 @@ export default function ComboBuilderPage() {
 
     setLoading(true)
     try {
-      const response = await fetch('/api/ai/analyze-combos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          colors: filters.colors,
-          format: filters.format,
-          max_combos: 30
+      let combos: CombinedCombo[] = []
+
+      if (filters.creative_mode) {
+        // Use creative combo discovery
+        const response = await fetch('/api/ai/discover-creative-combos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            colors: filters.colors,
+            format: filters.format,
+            creativity_level: filters.creativity_level,
+            max_combo_pieces: filters.max_cards_per_combo,
+            include_obscure_cards: filters.include_obscure_cards,
+            min_power_level: filters.power_level_min
+          })
         })
-      })
 
-      const data = await response.json()
-      if (data.ok) {
-        let combos = data.combos || []
-        
-        // Applica filtri
-        if (filters.categories.length > 0) {
-          combos = combos.filter((combo: ComboSuggestion) => 
-            filters.categories.includes(combo.category)
-          )
+        const data = await response.json()
+        if (data.ok) {
+          combos = data.creative_combos.map((combo: CreativeCombo) => ({
+            ...combo,
+            type: 'creative' as const,
+            steps: combo.setup_steps,
+            setup_turns: 4, // Default value for creative combos
+            mana_cost_total: combo.cards.reduce((sum, card) => sum + (card.mana_value || 0), 0)
+          }))
         }
-        
-        combos = combos.filter((combo: ComboSuggestion) => 
-          combo.power_level >= filters.power_level_min &&
-          combo.setup_turns <= filters.max_setup_turns &&
-          combo.cards.length <= filters.max_cards_per_combo
-        )
-
-        setAvailableCombos(combos)
-        setCategories(data.categories || {})
-        setStep(2)
       } else {
-        alert('Errore analisi: ' + data.error)
+        // Use standard combo analysis
+        const response = await fetch('/api/ai/analyze-combos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            colors: filters.colors,
+            format: filters.format,
+            max_combos: 30
+          })
+        })
+
+        const data = await response.json()
+        if (data.ok) {
+          combos = data.combos || []
+        }
       }
+
+      // Apply filters
+      if (filters.categories.length > 0) {
+        combos = combos.filter((combo: CombinedCombo) => 
+          filters.categories.includes(combo.category)
+        )
+      }
+      
+      combos = combos.filter((combo: CombinedCombo) => 
+        combo.power_level >= filters.power_level_min &&
+        (combo.setup_turns || 4) <= filters.max_setup_turns &&
+        combo.cards.length <= filters.max_cards_per_combo
+      )
+
+      setAvailableCombos(combos)
+      setCategories(data.categories || {})
+      setStep(2)
+
     } catch (error) {
       console.error('Error analyzing combos:', error)
       alert('Errore durante l\'analisi delle combo')
@@ -132,7 +200,7 @@ export default function ComboBuilderPage() {
     }
   }
 
-  const toggleComboSelection = (combo: ComboSuggestion) => {
+  const toggleComboSelection = (combo: CombinedCombo) => {
     setSelectedCombos(prev => {
       const exists = prev.find(c => c.id === combo.id)
       if (exists) {
@@ -190,6 +258,24 @@ export default function ComboBuilderPage() {
     return 'text-green-400'
   }
 
+  const getObscurityColor = (level: string) => {
+    switch (level) {
+      case 'rare': return 'text-blue-400'
+      case 'obscure': return 'text-purple-400'
+      case 'hidden': return 'text-pink-400'
+      case 'unknown': return 'text-red-400'
+      default: return 'text-gray-400'
+    }
+  }
+
+  const isCreativeCombo = (combo: CombinedCombo): combo is CreativeCombo & { type: 'creative' } => {
+    return 'creativity_score' in combo
+  }
+
+  const getCurrentCategories = () => {
+    return filters.creative_mode ? creativeCategories : comboCategories
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
       <div className="max-w-6xl mx-auto px-4 py-8">
@@ -203,7 +289,7 @@ export default function ComboBuilderPage() {
               ← Indietro
             </button>
             <h1 className="text-3xl font-bold text-white">
-              AI Combo Builder
+              AI Combo Builder {filters.creative_mode && <span className="text-purple-400">• Creative Mode</span>}
             </h1>
           </div>
           
@@ -237,9 +323,79 @@ export default function ComboBuilderPage() {
                 Configura la tua ricerca
               </h2>
               <p className="text-xl text-gray-300">
-                L'AI analizzerà migliaia di carte per trovare le migliori combo
+                L'AI analizzerà migliaia di carte per trovare {filters.creative_mode ? 'combo creative uniche' : 'le migliori combo'}
               </p>
             </div>
+
+            {/* Creative Mode Toggle */}
+            <div className="bg-gray-800 rounded-2xl p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-white mb-2">Modalità Ricerca</h3>
+                  <p className="text-gray-300 text-sm">
+                    {filters.creative_mode 
+                      ? 'Trova combo oscure mai viste, sfruttando meccaniche rare e interazioni nascoste'
+                      : 'Trova combo consolidate e affidabili basate su pattern noti'
+                    }
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={filters.creative_mode}
+                    onChange={(e) => setFilters(prev => ({ ...prev, creative_mode: e.target.checked }))}
+                  />
+                  <div className="w-14 h-7 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600"></div>
+                  <span className="ml-3 text-sm font-medium text-white">
+                    {filters.creative_mode ? 'Creative Mode' : 'Standard Mode'}
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* Creative Mode Settings */}
+            {filters.creative_mode && (
+              <div className="bg-gray-800 rounded-2xl p-6 border-2 border-purple-500/30">
+                <h3 className="text-xl font-bold text-white mb-4">Impostazioni Creative</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Livello Creatività
+                    </label>
+                    <select
+                      value={filters.creativity_level}
+                      onChange={(e) => setFilters(prev => ({ 
+                        ...prev, 
+                        creativity_level: e.target.value as 'low' | 'medium' | 'high'
+                      }))}
+                      className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                    >
+                      <option value="low">Bassa - Combo insolite ma semplici</option>
+                      <option value="medium">Media - Interazioni complesse</option>
+                      <option value="high">Alta - Solo combo mai viste</option>
+                    </select>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={filters.include_obscure_cards}
+                        onChange={(e) => setFilters(prev => ({ 
+                          ...prev, 
+                          include_obscure_cards: e.target.checked 
+                        }))}
+                        className="form-checkbox h-5 w-5 text-purple-600"
+                      />
+                      <span className="ml-3 text-sm text-gray-300">
+                        Includi carte oscure da set vecchi
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Format */}
             <div className="bg-gray-800 rounded-2xl p-6">
@@ -301,7 +457,7 @@ export default function ComboBuilderPage() {
                 Tipi di Combo (opzionale)
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                {comboCategories.map(category => (
+                {getCurrentCategories().map(category => (
                   <button
                     key={category.key}
                     onClick={() => toggleCategory(category.key)}
@@ -397,16 +553,18 @@ export default function ComboBuilderPage() {
                 className={`px-8 py-4 rounded-xl font-bold text-lg transition-all transform ${
                   loading || filters.colors.length === 0
                     ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:scale-105 hover:shadow-lg'
+                    : filters.creative_mode
+                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:scale-105 hover:shadow-lg'
+                      : 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:scale-105 hover:shadow-lg'
                 }`}
               >
                 {loading ? (
                   <div className="flex items-center">
                     <div className="animate-spin w-5 h-5 border-2 border-gray-400 border-t-white rounded-full mr-3"></div>
-                    Analizzando...
+                    {filters.creative_mode ? 'Scoprendo combo creative...' : 'Analizzando...'}
                   </div>
                 ) : (
-                  'Trova Combo con AI'
+                  filters.creative_mode ? 'Scopri Combo Creative' : 'Trova Combo con AI'
                 )}
               </button>
             </div>
@@ -421,11 +579,14 @@ export default function ComboBuilderPage() {
                 Seleziona le tue combo preferite
               </h2>
               <p className="text-gray-300">
-                Trovate {availableCombos.length} combo per i colori {filters.colors.join(', ')}
+                {filters.creative_mode 
+                  ? `Scoperte ${availableCombos.length} combo creative per i colori ${filters.colors.join(', ')}`
+                  : `Trovate ${availableCombos.length} combo per i colori ${filters.colors.join(', ')}`
+                }
               </p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
               {availableCombos.map(combo => (
                 <div
                   key={combo.id}
@@ -439,15 +600,28 @@ export default function ComboBuilderPage() {
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center space-x-2">
                       <span className="text-2xl">
-                        {comboCategories.find(c => c.key === combo.category)?.icon || '💫'}
+                        {getCurrentCategories().find(c => c.key === combo.category)?.icon || '💫'}
                       </span>
                       <div className="text-sm">
-                        <div className={`font-medium ${getReliabilityColor(combo.reliability)}`}>
-                          {combo.reliability.toUpperCase()}
-                        </div>
-                        <div className={`${getPowerLevelColor(combo.power_level)}`}>
-                          Power {combo.power_level}/10
-                        </div>
+                        {isCreativeCombo(combo) ? (
+                          <>
+                            <div className={`font-medium ${getObscurityColor(combo.obscurity_level)}`}>
+                              {combo.obscurity_level.toUpperCase()}
+                            </div>
+                            <div className="text-purple-400">
+                              Creative {combo.creativity_score}/10
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className={`font-medium ${getReliabilityColor(combo.reliability)}`}>
+                              {combo.reliability.toUpperCase()}
+                            </div>
+                            <div className={`${getPowerLevelColor(combo.power_level)}`}>
+                              Power {combo.power_level}/10
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                     {selectedCombos.find(c => c.id === combo.id) && (
@@ -478,30 +652,48 @@ export default function ComboBuilderPage() {
                     </div>
                   </div>
 
-                  <div className="text-sm space-y-1">
+                  <div className="text-sm space-y-1 mb-4">
                     <div className="flex justify-between">
                       <span className="text-gray-400">Setup:</span>
-                      <span className="text-white">{combo.setup_turns} turni</span>
+                      <span className="text-white">{combo.setup_turns || 4} turni</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Costo totale:</span>
-                      <span className="text-white">{combo.mana_cost_total} mana</span>
+                      <span className="text-white">{combo.mana_cost_total || 'Variable'} mana</span>
                     </div>
+                    {isCreativeCombo(combo) && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Metodo:</span>
+                        <span className="text-purple-300 text-xs">{combo.discovery_method.replace(/_/g, ' ')}</span>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-gray-700">
+                  <div className="border-t border-gray-700 pt-3">
                     <div className="text-xs text-gray-400 mb-1">Come funziona:</div>
                     <ol className="text-xs text-gray-300 space-y-1">
-                      {combo.steps.slice(0, 2).map((step, i) => (
+                      {(combo.steps || combo.setup_steps || []).slice(0, 2).map((step, i) => (
                         <li key={i}>
                           {i + 1}. {step}
                         </li>
                       ))}
-                      {combo.steps.length > 2 && (
-                        <li className="text-gray-500">... e altri {combo.steps.length - 2} passi</li>
+                      {(combo.steps || combo.setup_steps || []).length > 2 && (
+                        <li className="text-gray-500">
+                          ... e altri {(combo.steps || combo.setup_steps || []).length - 2} passi
+                        </li>
                       )}
                     </ol>
                   </div>
+
+                  {/* Creative combo additional info */}
+                  {isCreativeCombo(combo) && combo.timing_requirements.length > 0 && (
+                    <div className="border-t border-gray-700 pt-2 mt-2">
+                      <div className="text-xs text-purple-400 mb-1">Timing critico:</div>
+                      <div className="text-xs text-gray-300">
+                        {combo.timing_requirements[0]}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
