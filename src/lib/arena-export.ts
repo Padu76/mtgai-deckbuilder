@@ -30,7 +30,7 @@ export function exportDeckToArena(
 
   // Validate deck if requested
   if (validateDeck) {
-    const validation = validateDeck(deck, format)
+    const validation = validateDeckInternal(deck, format)
     if (!validation.isValid) {
       console.warn('Deck validation warnings:', validation.warnings)
     }
@@ -81,7 +81,7 @@ export function sortDeckForArena(deck: DeckCard[]): DeckCard[] {
   })
 }
 
-export function validateDeck(deck: DeckCard[], format: string = 'standard') {
+export function validateDeckInternal(deck: DeckCard[], format: string = 'standard') {
   const warnings: string[] = []
   const totalCards = deck.reduce((sum, card) => sum + card.quantity, 0)
 
