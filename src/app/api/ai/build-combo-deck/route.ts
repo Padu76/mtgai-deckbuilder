@@ -157,7 +157,8 @@ async function buildOptimalDeckList(
   const dualLands = landCards.filter(c => c.color_identity.length > 1).slice(0, Math.floor(landsNeeded * 0.4))
   const basicLands = landCards.filter(c => c.oracle_text.toLowerCase().includes('basic')).slice(0, landsNeeded - dualLands.length)
 
-  [...dualLands, ...basicLands].forEach(land => {
+  const allLands = dualLands.concat(basicLands)
+  allLands.forEach(land => {
     if (deckList.reduce((sum, c) => sum + c.quantity, 0) < (format === 'brawl' ? 99 : 60)) {
       deckList.push({
         card_id: land.id,
