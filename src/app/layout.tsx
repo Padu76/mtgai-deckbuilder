@@ -3,6 +3,7 @@ import './globals.css'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { DeckWorkspaceProvider } from '../components/DeckWorkspaceContext'
+import DeckWorkspaceUI from '../components/DeckWorkspaceUI'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -38,6 +39,9 @@ export default function RootLayout({
           <div id="root">
             {children}
           </div>
+          
+          {/* Global Deck Workspace UI */}
+          <DeckWorkspaceUI />
           
           {/* Toast notifications container */}
           <div id="toast-container" className="fixed top-4 right-4 z-50 space-y-2"></div>
