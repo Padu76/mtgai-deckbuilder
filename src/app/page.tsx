@@ -70,23 +70,6 @@ export default function HomePage() {
     }
   ]
 
-  const stats = [
-    { label: 'Combo Scoperte', value: '12,847+', icon: '⚡' },
-    { label: 'Utenti Attivi', value: '2,341', icon: '👥' },
-    { label: 'Deck Ottimizzati', value: '5,629', icon: '🏆' }
-  ]
-
-  const quickActions = [
-    {
-      title: 'Start Quick',
-      actions: [
-        { name: 'Trova Combo Blu', link: '/combo-builder?colors=U', icon: '🔵' },
-        { name: 'Deck Aggro', link: '/build-from-cards?archetype=aggro', icon: '⚡' },
-        { name: 'Combo Infinite', link: '/combo-builder?category=infinite', icon: '♾️' }
-      ]
-    }
-  ]
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Hero Section */}
@@ -134,8 +117,6 @@ export default function HomePage() {
           </div>
         </div>
       </div>
-
-
 
       {/* Main Features Grid */}
       <div className="max-w-7xl mx-auto px-4 py-16">
@@ -301,4 +282,21 @@ export default function HomePage() {
       <footer className="bg-slate-900 border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="text-
+            <div className="text-slate-400 mb-4 md:mb-0">
+              <p>© 2025 MTG Arena AI. Creato con ❤️ per la community Magic.</p>
+              <p className="text-sm text-slate-500 mt-1">
+                Non affiliato con Wizards of the Coast. Magic: The Gathering è un marchio di Wizards of the Coast LLC.
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="px-3 py-1 bg-green-500/20 text-green-400 border border-green-500/30 rounded-full text-sm flex items-center gap-2">
+                <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                Servizi Online
+              </span>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  )
+}
