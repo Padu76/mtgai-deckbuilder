@@ -211,7 +211,7 @@ GENERA 5-8 COMBO UNICHE E CREATIVE che rispettino questi parametri.
 Evita le combo ovvie che tutti conoscono. Cerca sinergie sottili e interazioni interessanti.
 
 ${params.exclude_existing.length > 0 ? 
-  `NON usare queste combo già note:\n${params.exclude_existing.slice(0, 5).map(cards => `- ${cards.join(' + ')}`).join('\n')}\n` : ''}
+  `NON usare queste combo già note:\n${params.exclude_existing.slice(0, 5).map((cards: string[]) => `- ${cards.join(' + ')}`).join('\n')}\n` : ''}
 
 FORMATO JSON RICHIESTO:
 {
