@@ -1,4 +1,6 @@
 // src/app/api/combos/route.ts
+// Fixed API endpoint with source filtering and POST search support
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
@@ -38,6 +40,17 @@ export async function GET(req: NextRequest) {
           )
         )
       `)
+
+    // Source filter - NEW
+    const source = searchParams.get('source')
+    if (source && source.trim()) {
+      const sourceArray = source.split(',').map(s => s.trim()).filter(Boolean)
+      if (sourceArray.length === 1) {
+        query = query.eq('source', sourceArray[0])
+      } else if (sourceArray.length > 1) {
+        query = query.in('source', sourceArray)
+      }
+    }
 
     // Color filter
     const colors = searchParams.get('colors')
@@ -114,8 +127,104 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST endpoint to create new combos (admin only)
+// POST endpoint for advanced search with filters in body
 export async function POST(req: NextRequest) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return NextResponse.json({ ok: false, error: 'Missing Supabase env' }, { status: 500 })
+  }
+
+  const supa = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } })
+
+  try {
+    const body = await req.json()
+    const { query: searchQuery, filters, limit: requestLimit } = body
+
+    let query = supa
+      .from('combos')
+      .select(`
+        id,
+        name,
+        source,
+        result_tag,
+        color_identity,
+        steps,
+        links,
+        combo_cards (
+          cards (
+            id,
+            name,
+            image_url,
+            image_uris,
+            mana_cost,
+            types
+          )
+        )
+      `)
+
+    // Apply filters from body
+    if (filters) {
+      // Source filter
+      if (filters.source && Array.isArray(filters.source) && filters.source.length > 0) {
+        if (filters.source.length === 1) {
+          query = query.eq('source', filters.source[0])
+        } else {
+          query = query.in('source', filters.source)
+        }
+      }
+
+      // Colors filter
+      if (filters.colors && Array.isArray(filters.colors) && filters.colors.length > 0) {
+        query = query.overlaps('color_identity', filters.colors)
+      }
+
+      // Result type filter
+      if (filters.result_type && filters.result_type !== 'all') {
+        query = query.ilike('result_tag', `%${filters.result_type}%`)
+      }
+    }
+
+    // Search query
+    if (searchQuery && searchQuery.trim()) {
+      query = query.ilike('name', `%${searchQuery.trim()}%`)
+    }
+
+    // Limit and order
+    const limit = Math.min(requestLimit || 50, 100)
+    query = query.order('name', { ascending: true }).limit(limit)
+
+    const { data: combos, error } = await query
+
+    if (error) {
+      console.error('Supabase search error:', error)
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    }
+
+    // Process the results to flatten the card data
+    const processedCombos = (combos || []).map(combo => ({
+      id: combo.id,
+      name: combo.name,
+      source: combo.source,
+      result_tag: combo.result_tag,
+      color_identity: combo.color_identity || [],
+      steps: combo.steps,
+      links: combo.links || [],
+      cards: (combo.combo_cards || []).map((cc: any) => cc.cards).filter(Boolean)
+    }))
+
+    return NextResponse.json({
+      ok: true,
+      combos: processedCombos,
+      count: processedCombos.length
+    })
+
+  } catch (e: any) {
+    console.error('Combos POST API error:', e)
+    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 })
+  }
+}
+
+// PUT endpoint to create/update combos (admin only)
+export async function PUT(req: NextRequest) {
   const adminKey = req.headers.get('x-admin-key')
   if (!adminKey || adminKey !== process.env.NEXT_PUBLIC_ADMIN_KEY) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
