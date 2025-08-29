@@ -1,10 +1,11 @@
 // src/app/new-sets-combos/page.tsx
-// Pagina con pulsanti Add to Deck e integrazione workspace
+// Pagina con simboli mana colorati e traduzioni combo integrate
 
 'use client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useDeckWorkspace } from '../../components/DeckWorkspaceContext'
+import { translateCombo, translateComboName, translateResultTag } from '../../lib/combo-translator'
 
 interface RecentSet {
   code: string
@@ -45,6 +46,73 @@ interface ComboResult {
     colors?: string[]
     set?: string
   }[]
+}
+
+// Componente per simboli mana colorati
+function ManaSymbol({ color, size = 'medium' }: { color: string, size?: 'small' | 'medium' | 'large' }) {
+  const sizeClasses = {
+    small: 'w-4 h-4 text-xs',
+    medium: 'w-5 h-5 text-xs', 
+    large: 'w-6 h-6 text-sm'
+  }
+
+  const colorStyles = {
+    'W': 'bg-white text-gray-800 border-2 border-gray-300',
+    'U': 'bg-blue-500 text-white',
+    'B': 'bg-gray-900 text-white border-2 border-gray-600',
+    'R': 'bg-red-500 text-white',
+    'G': 'bg-green-500 text-white',
+    'C': 'bg-gray-400 text-white border-2 border-gray-500'
+  }
+
+  const normalizedColor = color.toUpperCase()
+  const style = colorStyles[normalizedColor as keyof typeof colorStyles] || colorStyles['C']
+
+  const colorNames = {
+    'W': 'Bianco',
+    'U': 'Blu', 
+    'B': 'Nero',
+    'R': 'Rosso',
+    'G': 'Verde',
+    'C': 'Incolore'
+  }
+
+  return (
+    <div 
+      className={`
+        ${sizeClasses[size]} 
+        ${style}
+        rounded-full 
+        flex 
+        items-center 
+        justify-center 
+        font-bold
+        shadow-sm
+      `}
+      title={`${colorNames[normalizedColor as keyof typeof colorNames] || 'Sconosciuto'} mana`}
+    >
+      {normalizedColor}
+    </div>
+  )
+}
+
+// Componente per gruppo di simboli mana
+function ManaSymbols({ colors, size = 'medium' }: { colors: string[], size?: 'small' | 'medium' | 'large' }) {
+  if (!colors || colors.length === 0) {
+    return <span className="text-gray-500 text-sm">Incolore</span>
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      {colors.map((color, index) => (
+        <ManaSymbol 
+          key={`${color}-${index}`} 
+          color={color} 
+          size={size}
+        />
+      ))}
+    </div>
+  )
 }
 
 export default function NewSetsCombosPage() {
@@ -124,7 +192,14 @@ export default function NewSetsCombosPage() {
       
       if (response.ok) {
         const data = await response.json()
-        setDiscoveredCombos(data.combos || [])
+        // Traduci le combo automaticamente
+        const translatedCombos = (data.combos || []).map((combo: ComboResult) => ({
+          ...combo,
+          name: translateComboName(combo.name),
+          result_tag: translateResultTag(combo.result_tag),
+          steps: combo.steps // Manteniamo steps originali per ora, potrebbero essere già in italiano
+        }))
+        setDiscoveredCombos(translatedCombos)
       }
     } catch (error) {
       console.error('Error loading existing combos:', error)
@@ -488,8 +563,8 @@ export default function NewSetsCombosPage() {
                     <h3 className="font-semibold text-lg mb-1">{combo.name}</h3>
                     <p className="text-sm text-gray-400">{combo.result_tag}</p>
                   </div>
-                  <div className={`px-2 py-1 rounded text-xs border ${getColorBadgeClass(combo.color_identity)}`}>
-                    {combo.color_identity.length === 0 ? 'Colorless' : combo.color_identity.join('')}
+                  <div className="flex items-center gap-2">
+                    <ManaSymbols colors={combo.color_identity} size="small" />
                   </div>
                 </div>
                 
