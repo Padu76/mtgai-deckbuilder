@@ -52,16 +52,31 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    console.log(`Building deck from ${selected_combos.length} combos with card pool available`)
+    if (!colors || colors.length === 0) {
+      return NextResponse.json({ 
+        error: 'Colors array is required',
+        ok: false 
+      }, { status: 400 })
+    }
+
+    console.log(`Building ${format} deck from ${selected_combos.length} combos for colors: ${colors.join(', ')}`)
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-    // Get card pool with null safety
-    const { data: cardPool, error } = await supabase
+    // Get card pool with format filtering - same as analyze-combos
+    let query = supabase
       .from('cards')
       .select('*')
       .not('oracle_text', 'is', null)
-      .limit(2000)
+
+    // Add format filtering
+    if (format === 'standard') {
+      query = query.eq('legal_standard', true)
+    } else if (format === 'historic' || format === 'brawl') {
+      query = query.eq('legal_historic', true)
+    }
+
+    const { data: cardPool, error } = await query.limit(3000)
 
     if (error) {
       console.error('Database error:', error)
@@ -71,7 +86,7 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
     }
 
-    // Safe card filtering with null checks
+    // FIXED: Strict color filtering matching analyze-combos
     const validCards = (cardPool || []).filter((card: Card) => {
       try {
         // Ensure required fields exist and are valid
@@ -80,54 +95,65 @@ export async function POST(request: NextRequest) {
         if (!Array.isArray(card.color_identity)) return false
         if (!Array.isArray(card.types)) return false
         
-        return true
+        // FIXED: Strict color identity matching
+        const cardColors = card.color_identity || []
+        
+        // Colorless cards (no color identity) are always allowed
+        if (cardColors.length === 0) return true
+        
+        // Card must have ONLY colors that are in our selected colors
+        return cardColors.every((color: string) => colors.includes(color))
       } catch (e) {
         console.warn(`Card validation error for card ${card.id}:`, e)
         return false
       }
     })
 
-    // Process cards safely
-    const processedCards = validCards.map((card: Card) => ({
-      ...card,
-      oracle_text: card.oracle_text || '',
-      name: card.name || '',
-      types: Array.isArray(card.types) ? card.types : [],
-      color_identity: Array.isArray(card.color_identity) ? card.color_identity : [],
-      colors: Array.isArray(card.colors) ? card.colors : []
-    }))
-
-    console.log(`Processing ${processedCards.length} valid cards for deck building`)
+    console.log(`Processing ${validCards.length} valid cards matching colors ${colors.join(', ')} in ${format} format`)
 
     const deckList: Array<{card_id: string, quantity: number, role: string}> = []
     const usedCards = new Set<string>()
 
-    // Add combo pieces (priority)
+    // FIXED: Add combo pieces as PRIORITY with correct quantity for format
+    console.log('Adding combo pieces...')
     for (const combo of selected_combos) {
+      console.log(`Processing combo: ${combo.description}`)
       for (const comboCard of combo.cards) {
         if (!usedCards.has(comboCard.id)) {
-          const quantity = format === 'brawl' ? 1 : Math.min(4, 2)
+          // FIXED: Correct quantity based on format
+          const quantity = format === 'brawl' ? 1 : 4
           deckList.push({
             card_id: comboCard.id,
             quantity,
-            role: 'combo'
+            role: 'combo_piece'
           })
           usedCards.add(comboCard.id)
+          console.log(`Added ${comboCard.name} x${quantity} as combo piece`)
         }
       }
     }
 
-    console.log(`Added ${deckList.length} combo pieces`)
+    console.log(`Added ${deckList.length} unique combo pieces`)
 
-    // Define support categories
+    // FIXED: Format-specific deck building strategy
+    const isBrawl = format === 'brawl'
+    const targetCards = isBrawl ? 100 : 60
+    const landRatio = isBrawl ? 0.38 : 0.4 // Slightly more lands for Brawl
+
+    // Define support categories with format-specific counts
     const supportCategories = [
       {
         name: 'ramp',
-        count: format === 'brawl' ? 8 : 4,
+        count: isBrawl ? 10 : 6,
+        priority: 1,
         filter: (card: Card) => {
           try {
             const text = (card.oracle_text || '').toLowerCase()
-            return text.includes('add') && text.includes('mana') && (card.mana_value || 0) <= 3
+            return (
+              (text.includes('add') && text.includes('mana')) ||
+              (text.includes('search') && text.includes('land')) ||
+              text.includes('ramp')
+            ) && (card.mana_value || 0) <= 4
           } catch (e) {
             return false
           }
@@ -135,23 +161,34 @@ export async function POST(request: NextRequest) {
       },
       {
         name: 'removal', 
-        count: format === 'brawl' ? 6 : 8,
+        count: isBrawl ? 12 : 8,
+        priority: 1,
         filter: (card: Card) => {
           try {
             const text = (card.oracle_text || '').toLowerCase()
-            return text.includes('destroy') || text.includes('exile') || text.includes('damage')
+            return (
+              text.includes('destroy') || 
+              text.includes('exile') || 
+              (text.includes('damage') && (card.types || []).some(t => ['Instant', 'Sorcery'].includes(t))) ||
+              text.includes('counter target spell')
+            ) && (card.mana_value || 0) <= 6
           } catch (e) {
             return false
           }
         }
       },
       {
-        name: 'draw',
-        count: format === 'brawl' ? 6 : 4,
+        name: 'card_draw',
+        count: isBrawl ? 8 : 4,
+        priority: 2,
         filter: (card: Card) => {
           try {
             const text = (card.oracle_text || '').toLowerCase()
-            return text.includes('draw') && !text.includes('drawback')
+            return (
+              (text.includes('draw') && !text.includes('drawback')) ||
+              text.includes('scry') ||
+              text.includes('surveil')
+            ) && (card.mana_value || 0) <= 5
           } catch (e) {
             return false
           }
@@ -159,10 +196,38 @@ export async function POST(request: NextRequest) {
       },
       {
         name: 'threats',
-        count: format === 'brawl' ? 12 : 16,
+        count: isBrawl ? 20 : 18,
+        priority: 3,
         filter: (card: Card) => {
           try {
-            return (card.types || []).includes('Creature') && (card.mana_value || 0) >= 2 && (card.mana_value || 0) <= 6
+            return (
+              (card.types || []).includes('Creature') && 
+              (card.mana_value || 0) >= 2 && 
+              (card.mana_value || 0) <= 7 &&
+              // Prefer cards that synergize with our combos
+              (card.oracle_text || '').toLowerCase().includes('enters') ||
+              (card.oracle_text || '').toLowerCase().includes('death') ||
+              (card.oracle_text || '').toLowerCase().includes('sacrifice')
+            )
+          } catch (e) {
+            return false
+          }
+        }
+      },
+      {
+        name: 'utility',
+        count: isBrawl ? 8 : 4,
+        priority: 4,
+        filter: (card: Card) => {
+          try {
+            const text = (card.oracle_text || '').toLowerCase()
+            return (
+              text.includes('tutor') ||
+              text.includes('search') ||
+              text.includes('protection') ||
+              text.includes('hexproof') ||
+              text.includes('indestructible')
+            ) && (card.mana_value || 0) <= 5
           } catch (e) {
             return false
           }
@@ -170,33 +235,37 @@ export async function POST(request: NextRequest) {
       }
     ]
 
-    // Add support cards
+    // FIXED: Add support cards with proper format-specific quantities
     for (const category of supportCategories) {
-      // Safe filtering with null checks
-      const categoryCards = processedCards
+      console.log(`Finding ${category.name} cards...`)
+      
+      const categoryCards = validCards
         .filter((card: Card) => {
           try {
-            return category.filter(card)
+            return category.filter(card) && !usedCards.has(card.id)
           } catch (e) {
             return false
           }
         })
-        .filter((c: Card) => !usedCards.has(c.id))
         .sort((a: Card, b: Card) => {
-          // Prefer cards that match combo colors exactly
-          const aColorMatch = (a.color_identity || []).every((color: string) => colors.includes(color))
-          const bColorMatch = (b.color_identity || []).every((color: string) => colors.includes(color))
+          // Prefer cards that EXACTLY match our colors (not just subset)
+          const aColorMatch = (a.color_identity || []).length > 0 && 
+                            (a.color_identity || []).every((color: string) => colors.includes(color))
+          const bColorMatch = (b.color_identity || []).length > 0 && 
+                            (b.color_identity || []).every((color: string) => colors.includes(color))
+          
           if (aColorMatch && !bColorMatch) return -1
           if (!aColorMatch && bColorMatch) return 1
           
-          // Then by mana value (lower is better for most categories)
+          // Then prefer lower mana cost for efficiency
           return (a.mana_value || 0) - (b.mana_value || 0)
         })
         .slice(0, category.count)
 
-      categoryCards.forEach((card: Card) => {
-        if (deckList.length < (format === 'brawl' ? 99 : 60)) {
-          const quantity = format === 'brawl' ? 1 : Math.min(4, category.name === 'removal' ? 3 : 2)
+      for (const card of categoryCards) {
+        if (deckList.length < targetCards - Math.floor(targetCards * landRatio)) {
+          // FIXED: Correct quantity for all formats
+          const quantity = format === 'brawl' ? 1 : Math.min(4, 3)
           deckList.push({
             card_id: card.id,
             quantity,
@@ -204,90 +273,144 @@ export async function POST(request: NextRequest) {
           })
           usedCards.add(card.id)
         }
-      })
+      }
+      
+      console.log(`Added ${categoryCards.length} ${category.name} cards`)
     }
 
-    console.log(`Added support cards, deck now has ${deckList.length} entries`)
+    console.log(`Non-land cards: ${deckList.length} entries`)
 
-    // Land selection with safe filtering
-    const landsNeeded = Math.min(24, Math.max(20, 60 - deckList.length))
+    // FIXED: Land selection with proper mana base
+    const currentCardCount = deckList.reduce((sum, card) => sum + card.quantity, 0)
+    const landsNeeded = targetCards - currentCardCount
     
-    const landCards = processedCards.filter((c: Card) => {
+    console.log(`Need ${landsNeeded} lands to reach ${targetCards} cards`)
+
+    // Smart land selection based on colors
+    const coloredLands = validCards.filter((c: Card) => {
       try {
+        const types = c.types || []
+        const colorId = c.color_identity || []
+        const text = (c.oracle_text || '').toLowerCase()
+        
         return (
-          (c.types || []).includes('Land') && 
+          types.includes('Land') && 
           !usedCards.has(c.id) &&
-          ((c.color_identity || []).length === 0 || (c.color_identity || []).every((color: string) => colors.includes(color)))
+          (
+            // Dual lands that produce our colors
+            (colorId.length === 2 && colorId.every(color => colors.includes(color))) ||
+            // Basic lands of our colors
+            (colorId.length === 1 && colors.includes(colorId[0]) && text.includes('basic')) ||
+            // Utility lands that are colorless but useful
+            (colorId.length === 0 && (text.includes('draw') || text.includes('scry') || text.includes('life')))
+          )
         )
       } catch (e) {
         return false
       }
     })
 
-    console.log(`Found ${landCards.length} potential lands`)
+    // Prioritize dual lands, then basics, then utility
+    const dualLands = coloredLands.filter(c => (c.color_identity || []).length === 2)
+    const basicLands = coloredLands.filter(c => (c.oracle_text || '').toLowerCase().includes('basic'))
+    const utilityLands = coloredLands.filter(c => (c.color_identity || []).length === 0)
 
-    // Add dual lands first, then basics
-    const dualLands = landCards.filter(c => (c.color_identity || []).length > 1).slice(0, Math.floor(landsNeeded * 0.4))
-    const basicLands = landCards.filter(c => (c.oracle_text || '').toLowerCase().includes('basic')).slice(0, landsNeeded - dualLands.length)
-    
-    const allLands = dualLands.concat(basicLands)
-    allLands.forEach((land: Card) => {
+    // Calculate land distribution
+    const dualCount = Math.min(dualLands.length, Math.floor(landsNeeded * 0.3))
+    const basicCount = Math.min(basicLands.length, landsNeeded - dualCount - Math.min(3, utilityLands.length))
+    const utilityCount = Math.min(utilityLands.length, 3)
+
+    // Add lands to deck
+    dualLands.slice(0, dualCount).forEach((land: Card) => {
       const quantity = format === 'brawl' ? 1 : Math.min(4, 2)
       deckList.push({
         card_id: land.id,
         quantity,
-        role: 'land'
+        role: 'dual_land'
       })
     })
 
-    console.log(`Final deck has ${deckList.length} card entries`)
+    basicLands.slice(0, basicCount).forEach((land: Card) => {
+      const quantity = format === 'brawl' ? 1 : Math.min(4, 3)
+      deckList.push({
+        card_id: land.id,
+        quantity,
+        role: 'basic_land'
+      })
+    })
 
-    // Create deck record
+    utilityLands.slice(0, utilityCount).forEach((land: Card) => {
+      const quantity = format === 'brawl' ? 1 : 1
+      deckList.push({
+        card_id: land.id,
+        quantity,
+        role: 'utility_land'
+      })
+    })
+
+    const finalCardCount = deckList.reduce((sum, card) => sum + card.quantity, 0)
+    console.log(`Final deck: ${deckList.length} unique cards, ${finalCardCount} total cards`)
+
+    // Create deck record with proper data
     const deckData = {
       format,
-      colors,
-      combo_ids: selected_combos.map((c: ComboSuggestion) => c.id),
+      bo_mode: 'bo1',
+      name: `AI ${format.charAt(0).toUpperCase() + format.slice(1)} Combo Deck - ${colors.join('')}`,
+      notes: `Generated from ${selected_combos.length} combo(s): ${selected_combos.map(c => c.description).join(', ')}`,
+      is_public: false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
 
-    const { data: deck, error: deckError } = await supabase
-      .from('decks')
-      .insert(deckData)
-      .select()
-      .single()
+    // Try to save to database, but continue if it fails
+    try {
+      const { data: deck, error: deckError } = await supabase
+        .from('decks')
+        .insert(deckData)
+        .select()
+        .single()
 
-    if (deckError) {
-      console.warn('Could not save deck to database:', deckError)
-      // Continue without saving - return deck data anyway
-      return NextResponse.json({
-        ok: true,
-        deck_id: `temp_${Date.now()}`,
-        deck: deckList,
-        message: 'Deck generated successfully (not saved to database)'
-      })
+      if (!deckError && deck) {
+        // Save deck cards
+        const deckCards = deckList.map(card => ({
+          ...card,
+          deck_id: deck.id
+        }))
+
+        const { error: cardsError } = await supabase
+          .from('deck_cards')
+          .insert(deckCards)
+
+        if (cardsError) {
+          console.warn('Could not save deck cards:', cardsError)
+        }
+
+        return NextResponse.json({
+          ok: true,
+          deck_id: deck.id,
+          deck: deckList,
+          combos_integrated: selected_combos.length,
+          total_cards: finalCardCount,
+          format: format,
+          colors: colors,
+          combo_descriptions: selected_combos.map(c => c.description)
+        })
+      }
+    } catch (dbError) {
+      console.warn('Database save failed, returning deck data anyway:', dbError)
     }
 
-    // Save deck cards
-    const deckCards = deckList.map(card => ({
-      ...card,
-      deck_id: deck.id
-    }))
-
-    const { error: cardsError } = await supabase
-      .from('deck_cards')
-      .insert(deckCards)
-
-    if (cardsError) {
-      console.warn('Could not save deck cards:', cardsError)
-    }
-
+    // Return deck even if save failed
     return NextResponse.json({
       ok: true,
-      deck_id: deck.id,
+      deck_id: `temp_${Date.now()}`,
       deck: deckList,
       combos_integrated: selected_combos.length,
-      total_cards: deckList.reduce((sum, card) => sum + card.quantity, 0)
+      total_cards: finalCardCount,
+      format: format,
+      colors: colors,
+      combo_descriptions: selected_combos.map(c => c.description),
+      message: 'Deck generated successfully (database save failed)'
     })
 
   } catch (error: any) {
