@@ -34,12 +34,24 @@ interface ComboSuggestion {
   power_level: number
 }
 
+interface DeckCard {
+  card_id: string
+  quantity: number
+  role: string
+}
+
+interface SupportCategory {
+  name: string
+  count: number
+  filter: (card: Card) => boolean
+}
+
 async function buildOptimalDeckList(
   comboCores: Card[],
   colors: string[],
   format: string,
   supa: any
-): Promise<{ main: any[], side: any[], commander?: any }> {
+): Promise<{ main: DeckCard[], side: DeckCard[], commander?: Card }> {
   
   // Fetch supporting cards pool
   let query = supa
@@ -57,13 +69,13 @@ async function buildOptimalDeckList(
   }
 
   const { data: cardPool } = await query.limit(1000)
-  const cards = cardPool || []
+  const cards: Card[] = cardPool || []
 
-  const deckList: Array<{card_id: string, quantity: number, role: string}> = []
+  const deckList: DeckCard[] = []
   const usedCards = new Set<string>()
 
   // Add combo pieces (priority)
-  comboCores.forEach(card => {
+  comboCores.forEach((card: Card) => {
     if (!usedCards.has(card.id)) {
       const quantity = format === 'brawl' ? 1 : Math.min(4, 2) // 2x for combo pieces
       deckList.push({
@@ -75,11 +87,8 @@ async function buildOptimalDeckList(
     }
   })
 
-  // Calculate mana curve needs
-  const comboAvgCMC = comboCores.reduce((sum, c) => sum + (c.mana_value || 0), 0) / comboCores.length
-  
   // Add supporting cards by category
-  const supportCategories = [
+  const supportCategories: SupportCategory[] = [
     {
       name: 'ramp',
       count: format === 'brawl' ? 8 : 6,
@@ -117,8 +126,8 @@ async function buildOptimalDeckList(
       .filter((c: Card) => !usedCards.has(c.id))
       .sort((a: Card, b: Card) => {
         // Prefer cards that match combo colors exactly
-        const aColorMatch = a.color_identity.every(color => colors.includes(color))
-        const bColorMatch = b.color_identity.every(color => colors.includes(color))
+        const aColorMatch = a.color_identity.every((color: string) => colors.includes(color))
+        const bColorMatch = b.color_identity.every((color: string) => colors.includes(color))
         if (aColorMatch !== bColorMatch) return aColorMatch ? -1 : 1
         
         // Prefer lower CMC for ramp/removal, higher for threats
@@ -143,23 +152,23 @@ async function buildOptimalDeckList(
   }
 
   // Add lands
-  const landsNeeded = format === 'brawl' ? 
-    (99 - deckList.reduce((sum, c) => sum + c.quantity, 0)) :
-    (60 - deckList.reduce((sum, c) => sum + c.quantity, 0))
+  const currentCardCount = deckList.reduce((sum: number, c: DeckCard) => sum + c.quantity, 0)
+  const landsNeeded = (format === 'brawl' ? 99 : 60) - currentCardCount
 
-  const landCards = cards.filter(c => 
+  const landCards = cards.filter((c: Card) => 
     c.types.includes('Land') && 
     !usedCards.has(c.id) &&
-    (c.color_identity.length === 0 || c.color_identity.every(color => colors.includes(color)))
+    (c.color_identity.length === 0 || c.color_identity.every((color: string) => colors.includes(color)))
   )
 
   // Add dual lands first, then basics
-  const dualLands = landCards.filter(c => c.color_identity.length > 1).slice(0, Math.floor(landsNeeded * 0.4))
-  const basicLands = landCards.filter(c => c.oracle_text.toLowerCase().includes('basic')).slice(0, landsNeeded - dualLands.length)
+  const dualLands = landCards.filter((c: Card) => c.color_identity.length > 1).slice(0, Math.floor(landsNeeded * 0.4))
+  const basicLands = landCards.filter((c: Card) => c.oracle_text.toLowerCase().includes('basic')).slice(0, landsNeeded - dualLands.length)
 
   const allLands = dualLands.concat(basicLands)
-  allLands.forEach(land => {
-    if (deckList.reduce((sum, c) => sum + c.quantity, 0) < (format === 'brawl' ? 99 : 60)) {
+  allLands.forEach((land: Card) => {
+    const currentTotal = deckList.reduce((sum: number, c: DeckCard) => sum + c.quantity, 0)
+    if (currentTotal < (format === 'brawl' ? 99 : 60)) {
       deckList.push({
         card_id: land.id,
         quantity: format === 'brawl' ? 1 : Math.min(4, 3),
@@ -169,15 +178,15 @@ async function buildOptimalDeckList(
   })
 
   // Simple sideboard for non-brawl
-  const sideboard = format === 'brawl' ? [] : cards
-    .filter(c => 
+  const sideboard: DeckCard[] = format === 'brawl' ? [] : cards
+    .filter((c: Card) => 
       (c.oracle_text.toLowerCase().includes('destroy') && c.oracle_text.toLowerCase().includes('artifact')) ||
       (c.oracle_text.toLowerCase().includes('graveyard')) ||
       (c.types.includes('Instant') && c.oracle_text.toLowerCase().includes('counter'))
     )
-    .filter(c => !usedCards.has(c.id))
+    .filter((c: Card) => !usedCards.has(c.id))
     .slice(0, 5)
-    .map(card => ({
+    .map((card: Card): DeckCard => ({
       card_id: card.id,
       quantity: 3,
       role: 'side'
@@ -186,7 +195,7 @@ async function buildOptimalDeckList(
   return {
     main: deckList,
     side: sideboard,
-    commander: format === 'brawl' ? comboCores.find(c => 
+    commander: format === 'brawl' ? comboCores.find((c: Card) => 
       c.types.includes('Legendary') && c.types.includes('Creature')
     ) : undefined
   }
@@ -194,7 +203,11 @@ async function buildOptimalDeckList(
 
 export async function POST(req: NextRequest) {
   try {
-    const { selected_combos, format, colors } = await req.json()
+    const { selected_combos, format, colors }: {
+      selected_combos: ComboSuggestion[]
+      format: string
+      colors: string[]
+    } = await req.json()
 
     if (!selected_combos || selected_combos.length === 0) {
       return NextResponse.json({
@@ -216,8 +229,8 @@ export async function POST(req: NextRequest) {
 
     // Extract all unique cards from selected combos
     const allComboCards = selected_combos.flatMap((combo: ComboSuggestion) => combo.cards)
-    const uniqueComboCards = allComboCards.filter((card, index, array) => 
-      array.findIndex(c => c.id === card.id) === index
+    const uniqueComboCards = allComboCards.filter((card: Card, index: number, array: Card[]) => 
+      array.findIndex((c: Card) => c.id === card.id) === index
     )
 
     console.log(`Building deck with ${uniqueComboCards.length} combo cards...`)
@@ -244,14 +257,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Add cards to deck
-    const allDeckCards = [
+    const allDeckCards: DeckCard[] = [
       ...deckStructure.main,
       ...deckStructure.side,
       ...(deckStructure.commander ? [{ card_id: deckStructure.commander.id, quantity: 1, role: 'commander' }] : [])
     ]
 
     if (allDeckCards.length > 0) {
-      const deckCards = allDeckCards.map(dc => ({
+      const deckCards = allDeckCards.map((dc: DeckCard) => ({
         deck_id: deck.id,
         card_id: dc.card_id,
         quantity: dc.quantity,
@@ -275,7 +288,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       deck_id: deck.id,
       combo_count: selected_combos.length,
-      total_cards: deckStructure.main.reduce((sum: number, c: any) => sum + c.quantity, 0)
+      total_cards: deckStructure.main.reduce((sum: number, c: DeckCard) => sum + c.quantity, 0)
     })
 
   } catch (error: any) {
