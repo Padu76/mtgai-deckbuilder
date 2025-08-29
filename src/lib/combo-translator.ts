@@ -58,7 +58,6 @@ const MTG_TERMS: { [key: string]: string } = {
   'graveyard': 'cimitero',
   'library': 'grimorio',
   'hand': 'mano',
-  'exile': 'esilio',
   'stack': 'pila',
   'command zone': 'zona di comando',
   
