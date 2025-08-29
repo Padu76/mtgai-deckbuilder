@@ -657,7 +657,6 @@ async function findOrCreateCard(
     }
 
     log.push(`🔍 Created placeholder: ${cardName}`)
-    cardsCreated++
     return cardId
 
   } catch (error) {
