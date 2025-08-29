@@ -1,295 +1,289 @@
-// src/app/api/admin/sync-scryfall/route.ts
-import { NextResponse, NextRequest } from 'next/server'
+// src/app/api/admin/sync-scryfall-cards/route.ts
+// Endpoint per sincronizzazione massiva carte con Scryfall (immagini + nomi italiani)
+
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { 
+  fetchCardWithLocalizations, 
+  batchLocalizeCards, 
+  validateCardData,
+  needsScryfallSync 
+} from '@/lib/scryfall-enhanced'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const SCRYFALL_BULK_URL = process.env.SCRYFALL_BULK_URL || 'https://api.scryfall.com/cards/search?q=game%3Aarena+unique%3Aprints'
-const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY || ''
-
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
-interface ScryfallCard {
-  id: string
-  arena_id?: number
-  name: string
-  mana_value?: number
-  mana_cost?: string
-  colors?: string[]
-  color_identity?: string[]
-  type_line?: string
-  oracle_text?: string
-  set?: string
-  collector_number?: string
-  rarity?: string
-  image_uris?: {
-    small?: string
-    normal?: string
-    large?: string
-    art_crop?: string
-    border_crop?: string
-    png?: string
+const config = {
+  supabase: {
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY!
+  },
+  admin: {
+    key: process.env.NEXT_PUBLIC_ADMIN_KEY!
   }
-  legalities?: {
-    standard?: string
-    historic?: string
-    brawl?: string
-    historicbrawl?: string
-    [key: string]: string | undefined
-  }
-  games?: string[]
 }
 
-interface ProcessedCard {
-  scryfall_id: string
-  arena_id: number | null
-  name: string
-  mana_value: number | null
-  mana_cost: string | null
-  colors: string[]
-  color_identity: string[]
-  types: string[]
-  oracle_text: string | null
-  set_code: string | null
-  collector_number: string | null
-  rarity: string | null
-  image_url: string | null
-  image_uris: any
-  legal_standard: boolean
-  legal_historic: boolean
-  legal_brawl: boolean
-  in_arena: boolean
-  tags: string[]
-}
-
-function extractTags(card: ScryfallCard): string[] {
-  const tags: string[] = []
-  const text = (card.oracle_text || '').toLowerCase()
-  const typeLine = (card.type_line || '').toLowerCase()
-
-  // Meccaniche comuni
-  if (text.includes('gain') && text.includes('life')) tags.push('lifegain')
-  if (text.includes('treasure')) tags.push('treasures')
-  if (text.includes('token')) tags.push('tokens')
-  if (text.includes('+1/+1 counter') || text.includes('counter') && text.includes('+1')) tags.push('counters')
-  if (text.includes('destroy') || text.includes('exile')) tags.push('removal')
-  if (text.includes('draw') && text.includes('card')) tags.push('draw')
-  if (text.includes('mana') && (text.includes('add') || text.includes('produce'))) tags.push('ramp')
-  if (text.includes('sacrifice')) tags.push('sacrifice')
-  if (text.includes('graveyard') || text.includes('return') && text.includes('battlefield')) tags.push('graveyard')
-  if (text.includes('instant') || text.includes('sorcery')) tags.push('spells-matter')
-  if (text.includes('creature') && text.includes('enters')) tags.push('creatures-matter')
-  if (text.includes('artifact')) tags.push('artifacts-matter')
-  if (text.includes('enchantment')) tags.push('enchantments-matter')
-  if (text.includes('surveil')) tags.push('surveil')
-  if (text.includes('connive')) tags.push('connive')
-  if (text.includes('energy')) tags.push('energy')
-  if (text.includes('flash') || text.includes('instant speed')) tags.push('flash')
-  if (text.includes('flying')) tags.push('flying')
-  if (text.includes('trample')) tags.push('trample')
-  if (text.includes('vigilance')) tags.push('vigilance')
-  if (text.includes('haste')) tags.push('haste')
-  if (text.includes('reach')) tags.push('reach')
-  if (text.includes('deathtouch')) tags.push('deathtouch')
-  if (text.includes('lifelink')) tags.push('lifelink')
-  if (text.includes('first strike') || text.includes('double strike')) tags.push('first-strike')
-  if (text.includes('hexproof') || text.includes('shroud')) tags.push('protection')
-  if (text.includes('indestructible')) tags.push('indestructible')
-
-  // Archetipi comuni
-  if (typeLine.includes('creature') && card.mana_value && card.mana_value <= 2) tags.push('aggro')
-  if (typeLine.includes('instant') || typeLine.includes('sorcery')) {
-    if (text.includes('counter') && text.includes('spell')) tags.push('control')
-    if (text.includes('damage') && text.includes('target')) tags.push('burn')
+interface SyncResult {
+  success: boolean
+  message: string
+  stats?: {
+    cards_processed: number
+    cards_updated: number
+    cards_with_italian_names: number
+    cards_with_images: number
+    errors: number
   }
-  if (typeLine.includes('land')) tags.push('lands')
-  if (typeLine.includes('artifact') && text.includes('mana')) tags.push('mana-rocks')
-
-  return tags
+  errors?: string[]
+  log?: string[]
 }
 
-function processCard(card: ScryfallCard): ProcessedCard {
-  const types = (card.type_line || '').split(' — ')[0].split(' ').filter(Boolean)
+export async function POST(request: NextRequest): Promise<NextResponse<SyncResult>> {
+  const log: string[] = []
+  const errors: string[] = []
   
-  // Determine legalities
-  const legal_standard = card.legalities?.standard === 'legal'
-  const legal_historic = card.legalities?.historic === 'legal'
-  // Historic Brawl legalità: se è legale in Historic o esplicitamente in brawl
-  const legal_brawl = card.legalities?.historicbrawl === 'legal' || 
-                     card.legalities?.brawl === 'legal' || 
-                     legal_historic
-
-  // Extract tags based on card text and type
-  const tags = extractTags(card)
-
-  return {
-    scryfall_id: card.id,
-    arena_id: card.arena_id ?? null,
-    name: card.name,
-    mana_value: card.mana_value ?? null,
-    mana_cost: card.mana_cost ?? null,
-    colors: card.colors || [],
-    color_identity: card.color_identity || [],
-    types,
-    oracle_text: card.oracle_text || null,
-    set_code: card.set || null,
-    collector_number: card.collector_number || null,
-    rarity: card.rarity || null,
-    image_url: card.image_uris?.normal || null, // Per backward compatibility
-    image_uris: card.image_uris || null,
-    legal_standard,
-    legal_historic,
-    legal_brawl,
-    in_arena: (card.games || []).includes('arena'),
-    tags
-  }
-}
-
-async function fetchAllScryfallCards(): Promise<ScryfallCard[]> {
-  let url = SCRYFALL_BULK_URL
-  const allCards: ScryfallCard[] = []
-  let pageCount = 0
-  const maxPages = 200 // Safety limit
-
-  console.log('Starting Scryfall sync...')
-  
-  while (url && pageCount < maxPages) {
-    try {
-      console.log(`Fetching page ${pageCount + 1}...`)
-      const response = await fetch(url, { 
-        cache: 'no-store',
-        headers: {
-          'User-Agent': 'MTGAIDeckBuilder/1.0'
-        }
-      })
-      
-      if (!response.ok) {
-        throw new Error(`Scryfall API error: ${response.status} ${response.statusText}`)
-      }
-      
-      const data = await response.json()
-      
-      if (!data.data || !Array.isArray(data.data)) {
-        throw new Error('Invalid response format from Scryfall')
-      }
-      
-      allCards.push(...data.data as ScryfallCard[])
-      console.log(`Page ${pageCount + 1}: ${data.data.length} cards, total: ${allCards.length}`)
-      
-      // Check if there are more pages
-      if (data.has_more && data.next_page) {
-        url = data.next_page
-        pageCount++
-        
-        // Rate limiting: wait 100ms between requests
-        await new Promise(resolve => setTimeout(resolve, 100))
-      } else {
-        break
-      }
-      
-    } catch (error) {
-      console.error(`Error fetching page ${pageCount + 1}:`, error)
-      throw error
+  try {
+    log.push('Starting Scryfall cards synchronization...')
+    
+    const body = await request.json()
+    const adminKey = body.adminKey || request.headers.get('x-admin-key')
+    const mode = body.mode || 'outdated' // 'all', 'outdated', 'missing_images', 'missing_italian'
+    const limit = Math.min(body.limit || 100, 500) // Max 500 per volta per evitare timeout
+    
+    if (adminKey !== config.admin.key) {
+      return NextResponse.json({
+        success: false,
+        message: 'Unauthorized: Invalid admin key'
+      }, { status: 401 })
     }
-  }
-  
-  console.log(`Scryfall sync completed: ${allCards.length} total cards`)
-  return allCards
-}
 
-export async function GET(req: NextRequest) {
-  // Authentication check
-  const key = req.headers.get('x-admin-key') || new URL(req.url).searchParams.get('key') || ''
-  if (!ADMIN_KEY || key !== ADMIN_KEY) {
-    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
-  }
+    const supabase = createClient(config.supabase.url, config.supabase.serviceKey)
+    log.push('Supabase client initialized')
 
-  // Environment check
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return NextResponse.json({ 
-      ok: false, 
-      error: 'Missing Supabase environment variables' 
+    // Step 1: Ottieni carte da processare
+    log.push(`Loading cards to sync (mode: ${mode}, limit: ${limit})...`)
+    const cardsToProcess = await getCardsToSync(supabase, mode, limit, log)
+    log.push(`Found ${cardsToProcess.length} cards to process`)
+
+    if (cardsToProcess.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: 'No cards need synchronization',
+        stats: {
+          cards_processed: 0,
+          cards_updated: 0,
+          cards_with_italian_names: 0,
+          cards_with_images: 0,
+          errors: 0
+        },
+        log
+      })
+    }
+
+    // Step 2: Batch sync con Scryfall
+    log.push('Starting batch localization from Scryfall...')
+    const scryfallIds = cardsToProcess.map(card => card.scryfall_id)
+    
+    let processedCount = 0
+    const localizedCards = await batchLocalizeCards(
+      scryfallIds,
+      (processed, total) => {
+        processedCount = processed
+        if (processed % 10 === 0) {
+          log.push(`Processed ${processed}/${total} cards...`)
+        }
+      }
+    )
+
+    log.push(`Successfully localized ${localizedCards.length} cards`)
+
+    // Step 3: Aggiorna database
+    log.push('Updating database with localized data...')
+    const updateStats = await updateCardsInDatabase(supabase, localizedCards, log, errors)
+
+    const finalStats = {
+      cards_processed: cardsToProcess.length,
+      cards_updated: updateStats.updated,
+      cards_with_italian_names: updateStats.with_italian,
+      cards_with_images: updateStats.with_images,
+      errors: errors.length
+    }
+
+    log.push('Scryfall synchronization completed!')
+    log.push(`Updated ${updateStats.updated} cards`)
+    log.push(`${updateStats.with_italian} cards now have Italian names`)
+    log.push(`${updateStats.with_images} cards now have images`)
+
+    return NextResponse.json({
+      success: true,
+      message: `Synchronized ${updateStats.updated} cards with Scryfall data`,
+      stats: finalStats,
+      errors: errors.length > 0 ? errors : undefined,
+      log
+    })
+
+  } catch (error) {
+    const errorMessage = (error as Error).message
+    errors.push(`Fatal error: ${errorMessage}`)
+    log.push(`Scryfall sync failed: ${errorMessage}`)
+
+    return NextResponse.json({
+      success: false,
+      message: 'Scryfall synchronization failed',
+      errors,
+      log
     }, { status: 500 })
   }
+}
 
-  const supa = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { 
-    auth: { persistSession: false } 
-  })
+async function getCardsToSync(
+  supabase: any, 
+  mode: string, 
+  limit: number, 
+  log: string[]
+): Promise<Array<{id: string, scryfall_id: string, name: string, scryfall_synced_at?: string}>> {
+  let query = supabase
+    .from('cards')
+    .select('id, scryfall_id, name, scryfall_synced_at, image_url, name_it')
+    .not('scryfall_id', 'is', null)
+    .limit(limit)
 
-  try {
-    console.log('Starting card sync process...')
-    
-    // Fetch all cards from Scryfall
-    const scryfallCards = await fetchAllScryfallCards()
-    
-    if (scryfallCards.length === 0) {
-      throw new Error('No cards returned from Scryfall')
-    }
-    
-    // Process cards for database
-    const processedCards = scryfallCards.map(processCard)
-    
-    // Filter for Arena-only cards to reduce database size
-    const arenaCards = processedCards.filter(card => card.in_arena)
-    console.log(`Filtered to ${arenaCards.length} Arena cards`)
-    
-    // Upsert cards in chunks to avoid timeouts
-    let totalUpserts = 0
-    const chunkSize = 200
-    
-    for (let i = 0; i < arenaCards.length; i += chunkSize) {
-      const chunk = arenaCards.slice(i, i + chunkSize)
-      console.log(`Upserting chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(arenaCards.length / chunkSize)}...`)
+  switch (mode) {
+    case 'all':
+      // Tutte le carte con scryfall_id
+      log.push('Mode: sync all cards')
+      break
       
-      const { error, count } = await supa
+    case 'outdated':
+      // Carte non sincronizzate negli ultimi 7 giorni
+      const weekAgo = new Date()
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      query = query.or(`scryfall_synced_at.is.null,scryfall_synced_at.lt.${weekAgo.toISOString()}`)
+      log.push('Mode: sync outdated cards (>7 days old)')
+      break
+      
+    case 'missing_images':
+      // Carte senza immagini
+      query = query.or('image_url.is.null,image_url.eq.')
+      log.push('Mode: sync cards missing images')
+      break
+      
+    case 'missing_italian':
+      // Carte senza nomi italiani
+      query = query.or('name_it.is.null,name_it.eq.')
+      log.push('Mode: sync cards missing Italian names')
+      break
+      
+    default:
+      // Default: outdated
+      const defaultWeekAgo = new Date()
+      defaultWeekAgo.setDate(defaultWeekAgo.getDate() - 7)
+      query = query.or(`scryfall_synced_at.is.null,scryfall_synced_at.lt.${defaultWeekAgo.toISOString()}`)
+      log.push('Mode: default (outdated cards)')
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    throw new Error(`Failed to load cards: ${error.message}`)
+  }
+
+  return data || []
+}
+
+async function updateCardsInDatabase(
+  supabase: any,
+  localizedCards: any[],
+  log: string[],
+  errors: string[]
+): Promise<{updated: number, with_italian: number, with_images: number}> {
+  let updated = 0
+  let with_italian = 0
+  let with_images = 0
+
+  for (const cardData of localizedCards) {
+    try {
+      if (!validateCardData(cardData.merged)) {
+        errors.push(`Invalid card data for ${cardData.merged.name}`)
+        continue
+      }
+
+      const updateData = {
+        name_it: cardData.merged.name_it,
+        image_url: cardData.merged.image_url,
+        image_uris: cardData.merged.image_uris,
+        artwork_uri: cardData.merged.artwork_uri,
+        set_name: cardData.merged.set_name,
+        flavor_text: cardData.merged.flavor_text,
+        flavor_text_it: cardData.merged.flavor_text_it,
+        keywords: cardData.merged.keywords,
+        produced_mana: cardData.merged.produced_mana,
+        rarity: cardData.merged.rarity,
+        scryfall_uri: cardData.merged.scryfall_uri,
+        scryfall_synced_at: cardData.merged.scryfall_synced_at
+      }
+
+      const { error: updateError } = await supabase
         .from('cards')
-        .upsert(chunk, { 
-          onConflict: 'scryfall_id',
-          count: 'exact'
-        })
+        .update(updateData)
+        .eq('scryfall_id', cardData.merged.scryfall_id)
+
+      if (updateError) {
+        errors.push(`Failed to update ${cardData.merged.name}: ${updateError.message}`)
+        continue
+      }
+
+      updated++
       
-      if (error) {
-        console.error('Upsert error:', error)
-        throw new Error(`Database upsert failed: ${error.message}`)
+      if (cardData.merged.name_it && cardData.merged.name_it !== cardData.merged.name) {
+        with_italian++
       }
       
-      totalUpserts += count || chunk.length
+      if (cardData.merged.image_url) {
+        with_images++
+      }
+
+      // Log progress ogni 25 carte
+      if (updated % 25 === 0) {
+        log.push(`Database update progress: ${updated} cards processed`)
+      }
+
+    } catch (error) {
+      errors.push(`Error updating card: ${(error as Error).message}`)
     }
+  }
+
+  return { updated, with_italian, with_images }
+}
+
+// GET endpoint per statistiche sync
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = createClient(config.supabase.url, config.supabase.serviceKey)
     
-    // Log success
-    const successMessage = `Sync completed successfully: ${totalUpserts} cards upserted`
-    console.log(successMessage)
+    const { data: stats } = await supabase.rpc('get_localization_stats')
     
-    await supa.from('admin_logs').insert({
-      action: 'sync',
-      message: successMessage
-    })
-    
-    return NextResponse.json({ 
-      ok: true, 
-      upserts: totalUpserts,
-      total_fetched: scryfallCards.length,
-      arena_cards: arenaCards.length
-    })
-    
-  } catch (error: any) {
-    const errorMessage = `Sync failed: ${String(error)}`
-    console.error('Sync error:', error)
-    
-    // Log error to database
-    try {
-      await supa.from('admin_logs').insert({
-        action: 'sync_error',
-        message: errorMessage
+    if (!stats || stats.length === 0) {
+      return NextResponse.json({
+        success: false,
+        message: 'Failed to get localization statistics'
       })
-    } catch (logError) {
-      console.error('Failed to log error:', logError)
     }
+
+    const result = stats[0]
     
-    return NextResponse.json({ 
-      ok: false, 
-      error: errorMessage 
+    return NextResponse.json({
+      success: true,
+      stats: {
+        total_cards: parseInt(result.total_cards),
+        cards_with_italian_names: parseInt(result.cards_with_italian_names),
+        cards_with_images: parseInt(result.cards_with_images),
+        cards_synced_last_week: parseInt(result.cards_synced_last_week),
+        italian_coverage_percentage: parseFloat(result.coverage_percentage)
+      }
+    })
+
+  } catch (error) {
+    return NextResponse.json({
+      success: false,
+      message: 'Failed to fetch statistics',
+      error: (error as Error).message
     }, { status: 500 })
   }
 }
