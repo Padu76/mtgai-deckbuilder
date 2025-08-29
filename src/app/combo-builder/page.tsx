@@ -53,7 +53,32 @@ interface CreativeCombo {
   format_legal: string[]
 }
 
-type CombinedCombo = ComboSuggestion | (CreativeCombo & { type: 'creative' })
+// Unified type for both standard and creative combos
+interface UnifiedCombo {
+  id: string
+  cards: Card[]
+  category: string
+  description: string
+  power_level: number
+  // Standard combo fields
+  type?: 'infinite' | 'synergy' | 'win_condition' | 'value_engine'
+  steps?: string[]
+  reliability?: 'high' | 'medium' | 'low'
+  setup_turns?: number
+  mana_cost_total?: number
+  // Creative combo fields
+  creativity_score?: number
+  obscurity_level?: 'rare' | 'obscure' | 'hidden' | 'unknown'
+  explanation?: string[]
+  setup_steps?: string[]
+  timing_requirements?: string[]
+  rules_interactions?: string[]
+  consistency?: number
+  discovery_method?: string
+  format_legal?: string[]
+  // Flag to distinguish types
+  is_creative?: boolean
+}
 
 export default function ComboBuilderPage() {
   const router = useRouter()
@@ -72,8 +97,8 @@ export default function ComboBuilderPage() {
     include_obscure_cards: true
   })
   
-  const [availableCombos, setAvailableCombos] = useState<CombinedCombo[]>([])
-  const [selectedCombos, setSelectedCombos] = useState<CombinedCombo[]>([])
+  const [availableCombos, setAvailableCombos] = useState<UnifiedCombo[]>([])
+  const [selectedCombos, setSelectedCombos] = useState<UnifiedCombo[]>([])
   const [categories, setCategories] = useState<any>({})
 
   const colorOptions = [
@@ -130,7 +155,7 @@ export default function ComboBuilderPage() {
 
     setLoading(true)
     try {
-      let combos: CombinedCombo[] = []
+      let combos: UnifiedCombo[] = []
 
       if (filters.creative_mode) {
         // Use creative combo discovery
@@ -151,10 +176,11 @@ export default function ComboBuilderPage() {
         if (data.ok) {
           combos = data.creative_combos.map((combo: CreativeCombo) => ({
             ...combo,
-            type: 'creative' as const,
+            is_creative: true,
             steps: combo.setup_steps,
             setup_turns: 4, // Default value for creative combos
-            mana_cost_total: combo.cards.reduce((sum, card) => sum + (card.mana_value || 0), 0)
+            mana_cost_total: combo.cards.reduce((sum, card) => sum + (card.mana_value || 0), 0),
+            reliability: combo.consistency > 7 ? 'high' : combo.consistency > 4 ? 'medium' : 'low'
           }))
         }
       } else {
@@ -171,18 +197,21 @@ export default function ComboBuilderPage() {
 
         const data = await response.json()
         if (data.ok) {
-          combos = data.combos || []
+          combos = (data.combos || []).map((combo: ComboSuggestion) => ({
+            ...combo,
+            is_creative: false
+          }))
         }
       }
 
-      // Apply filters
+      // Apply filters with safe property access
       if (filters.categories.length > 0) {
-        combos = combos.filter((combo: CombinedCombo) => 
+        combos = combos.filter((combo: UnifiedCombo) => 
           filters.categories.includes(combo.category)
         )
       }
       
-      combos = combos.filter((combo: CombinedCombo) => 
+      combos = combos.filter((combo: UnifiedCombo) => 
         combo.power_level >= filters.power_level_min &&
         (combo.setup_turns || 4) <= filters.max_setup_turns &&
         combo.cards.length <= filters.max_cards_per_combo
@@ -200,7 +229,7 @@ export default function ComboBuilderPage() {
     }
   }
 
-  const toggleComboSelection = (combo: CombinedCombo) => {
+  const toggleComboSelection = (combo: UnifiedCombo) => {
     setSelectedCombos(prev => {
       const exists = prev.find(c => c.id === combo.id)
       if (exists) {
@@ -243,7 +272,7 @@ export default function ComboBuilderPage() {
     }
   }
 
-  const getReliabilityColor = (reliability: string) => {
+  const getReliabilityColor = (reliability?: string) => {
     switch (reliability) {
       case 'high': return 'text-green-400'
       case 'medium': return 'text-yellow-400'
@@ -258,7 +287,7 @@ export default function ComboBuilderPage() {
     return 'text-green-400'
   }
 
-  const getObscurityColor = (level: string) => {
+  const getObscurityColor = (level?: string) => {
     switch (level) {
       case 'rare': return 'text-blue-400'
       case 'obscure': return 'text-purple-400'
@@ -266,10 +295,6 @@ export default function ComboBuilderPage() {
       case 'unknown': return 'text-red-400'
       default: return 'text-gray-400'
     }
-  }
-
-  const isCreativeCombo = (combo: CombinedCombo): combo is CreativeCombo & { type: 'creative' } => {
-    return 'creativity_score' in combo
   }
 
   const getCurrentCategories = () => {
@@ -603,19 +628,19 @@ export default function ComboBuilderPage() {
                         {getCurrentCategories().find(c => c.key === combo.category)?.icon || '💫'}
                       </span>
                       <div className="text-sm">
-                        {isCreativeCombo(combo) ? (
+                        {combo.is_creative ? (
                           <>
                             <div className={`font-medium ${getObscurityColor(combo.obscurity_level)}`}>
-                              {combo.obscurity_level.toUpperCase()}
+                              {(combo.obscurity_level || 'UNKNOWN').toUpperCase()}
                             </div>
                             <div className="text-purple-400">
-                              Creative {combo.creativity_score}/10
+                              Creative {combo.creativity_score || 0}/10
                             </div>
                           </>
                         ) : (
                           <>
                             <div className={`font-medium ${getReliabilityColor(combo.reliability)}`}>
-                              {combo.reliability.toUpperCase()}
+                              {(combo.reliability || 'UNKNOWN').toUpperCase()}
                             </div>
                             <div className={`${getPowerLevelColor(combo.power_level)}`}>
                               Power {combo.power_level}/10
@@ -661,7 +686,7 @@ export default function ComboBuilderPage() {
                       <span className="text-gray-400">Costo totale:</span>
                       <span className="text-white">{combo.mana_cost_total || 'Variable'} mana</span>
                     </div>
-                    {isCreativeCombo(combo) && (
+                    {combo.is_creative && combo.discovery_method && (
                       <div className="flex justify-between">
                         <span className="text-gray-400">Metodo:</span>
                         <span className="text-purple-300 text-xs">{combo.discovery_method.replace(/_/g, ' ')}</span>
@@ -686,7 +711,7 @@ export default function ComboBuilderPage() {
                   </div>
 
                   {/* Creative combo additional info */}
-                  {isCreativeCombo(combo) && combo.timing_requirements.length > 0 && (
+                  {combo.is_creative && combo.timing_requirements && combo.timing_requirements.length > 0 && (
                     <div className="border-t border-gray-700 pt-2 mt-2">
                       <div className="text-xs text-purple-400 mb-1">Timing critico:</div>
                       <div className="text-xs text-gray-300">
