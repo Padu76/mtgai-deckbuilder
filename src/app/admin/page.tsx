@@ -1,4 +1,4 @@
-// Aggiornamento per src/app/admin/page.tsx - Con pulsante seeding combo
+// src/app/admin/page.tsx - Enhanced con statistiche complete e import Commander Spellbook
 'use client'
 import { useEffect, useState } from 'react'
 
@@ -11,12 +11,38 @@ interface SeedingStats {
   total_relationships: number
 }
 
+interface ImportStats {
+  total_fetched: number
+  high_quality: number
+  medium_quality: number
+  low_quality: number
+  imported: number
+  skipped: number
+  errors: number
+}
+
 interface SeedingResult {
   success: boolean
   message: string
   stats?: SeedingStats
   errors?: string[]
   log?: string[]
+}
+
+interface ImportResult {
+  success: boolean
+  message: string
+  stats?: ImportStats
+  errors?: string[]
+  log?: string[]
+}
+
+interface DatabaseStats {
+  total_combos: number
+  total_cards: number
+  total_relationships: number
+  combos_by_source: { [key: string]: number }
+  cards_by_type: { [key: string]: number }
 }
 
 export default function AdminPage() {
@@ -26,12 +52,17 @@ export default function AdminPage() {
   const [keyParam, setKeyParam] = useState<string>('')
   const [info, setInfo] = useState<any|null>(null)
   const [comboStats, setComboStats] = useState<any|null>(null)
+  const [databaseStats, setDatabaseStats] = useState<DatabaseStats | null>(null)
   const [syncingCards, setSyncingCards] = useState(false)
   const [syncingCombos, setSyncingCombos] = useState(false)
   
-  // Nuovo stato per seeding
+  // Seeding state
   const [seedingCombos, setSeedingCombos] = useState(false)
   const [seedingResult, setSeedingResult] = useState<SeedingResult | null>(null)
+  
+  // Import state
+  const [importingCombos, setImportingCombos] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
 
   useEffect(() => {
     const url = new URL(window.location.href)
@@ -64,6 +95,33 @@ export default function AdminPage() {
     }
   }
 
+  async function loadDatabaseStats() {
+    try {
+      const k = keyParam || keyInput
+      
+      // Carica statistiche complete
+      const [combosRes, cardsRes, relationshipsRes] = await Promise.all([
+        fetch('/api/combos?limit=1', { headers: { 'x-admin-key': k } }),
+        fetch('/api/cards?limit=1', { headers: { 'x-admin-key': k } }),
+        fetch('/api/admin/stats', { headers: { 'x-admin-key': k } })
+      ])
+      
+      const combosData = await combosRes.json()
+      const cardsData = await cardsRes.json()
+      const statsData = relationshipsRes.ok ? await relationshipsRes.json() : null
+      
+      setDatabaseStats({
+        total_combos: combosData.count || 0,
+        total_cards: cardsData.count || 0,
+        total_relationships: statsData?.total_relationships || 0,
+        combos_by_source: statsData?.combos_by_source || {},
+        cards_by_type: statsData?.cards_by_type || {}
+      })
+    } catch (error) {
+      console.error('Error loading database stats:', error)
+    }
+  }
+
   function verify(k: string) {
     const ADMIN = process.env.NEXT_PUBLIC_ADMIN_KEY || ''
     if (!ADMIN) { 
@@ -75,6 +133,7 @@ export default function AdminPage() {
       setStatus('✅ Accesso admin abilitato.')
       loadStatus()
       loadComboStats()
+      loadDatabaseStats()
     } else {
       setAllowed(false)
       setStatus('❌ Chiave errata.')
@@ -96,6 +155,7 @@ export default function AdminPage() {
       } else {
         setStatus(`✅ Sync carte OK: ${json.upserts} carte, ${json.arena_cards} su Arena`)
         loadStatus()
+        loadDatabaseStats()
       }
     } catch (e: any) { 
       setStatus('❌ Errore: ' + e.message) 
@@ -119,6 +179,7 @@ export default function AdminPage() {
       } else {
         setStatus(`✅ Sync combo OK: ${json.inserted} nuove combo aggiunte (${json.processed} processate)`)
         loadComboStats()
+        loadDatabaseStats()
       }
     } catch (e: any) { 
       setStatus('❌ Errore: ' + e.message) 
@@ -127,7 +188,6 @@ export default function AdminPage() {
     }
   }
 
-  // Nuova funzione per seeding combo
   async function runComboSeeding() {
     setSeedingCombos(true)
     setSeedingResult(null)
@@ -151,6 +211,7 @@ export default function AdminPage() {
       if (result.success) {
         setStatus(`✅ Seeding completato: ${result.stats?.combos_created} combo, ${result.stats?.cards_created} carte create`)
         loadComboStats()
+        loadDatabaseStats()
       } else {
         setStatus('❌ Errore seeding: ' + result.message)
       }
@@ -158,13 +219,46 @@ export default function AdminPage() {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Errore sconosciuto'
       setStatus('❌ Errore di rete: ' + errorMsg)
-      setSeedingResult({
-        success: false,
-        message: errorMsg,
-        errors: ['Impossibile contattare il server']
-      })
     } finally {
       setSeedingCombos(false)
+    }
+  }
+
+  async function runCommanderSpellbookImport() {
+    setImportingCombos(true)
+    setImportResult(null)
+    setStatus('⏳ Importando combo da Commander Spellbook...')
+    
+    try {
+      const k = keyParam || keyInput
+      const res = await fetch('/api/admin/import-commander-spellbook', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          adminKey: k,
+          maxCombos: 150, // Importa max 150 combo di alta qualità
+          minQuality: 5   // Qualità minima 5/10
+        })
+      })
+      
+      const result: ImportResult = await res.json()
+      setImportResult(result)
+      
+      if (result.success) {
+        setStatus(`✅ Import completato: ${result.stats?.imported} combo importate da Commander Spellbook`)
+        loadComboStats()
+        loadDatabaseStats()
+      } else {
+        setStatus('❌ Errore import: ' + result.message)
+      }
+      
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Errore sconosciuto'
+      setStatus('❌ Errore di rete: ' + errorMsg)
+    } finally {
+      setImportingCombos(false)
     }
   }
 
@@ -210,7 +304,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
@@ -232,8 +326,65 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Main Actions - Aggiornato con 3 colonne */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        {/* Database Statistics */}
+        {databaseStats && (
+          <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 mb-8">
+            <h2 className="text-2xl font-bold text-white mb-6">Database Statistics</h2>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+              <div className="text-center">
+                <div className="text-4xl font-bold text-blue-400 mb-2">
+                  {databaseStats.total_combos.toLocaleString()}
+                </div>
+                <div className="text-gray-300">Combo Totali</div>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-bold text-green-400 mb-2">
+                  {databaseStats.total_cards.toLocaleString()}
+                </div>
+                <div className="text-gray-300">Carte Totali</div>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-bold text-purple-400 mb-2">
+                  {databaseStats.total_relationships.toLocaleString()}
+                </div>
+                <div className="text-gray-300">Relazioni</div>
+              </div>
+            </div>
+
+            {/* Combo by Source */}
+            {Object.keys(databaseStats.combos_by_source).length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-3">Combo per Fonte</h3>
+                  <div className="space-y-2">
+                    {Object.entries(databaseStats.combos_by_source).map(([source, count]) => (
+                      <div key={source} className="flex justify-between items-center bg-gray-700 rounded-lg px-3 py-2">
+                        <span className="text-gray-300 capitalize">{source.replace('_', ' ')}</span>
+                        <span className="text-white font-medium">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-3">Carte per Tipo</h3>
+                  <div className="space-y-2">
+                    {Object.entries(databaseStats.cards_by_type).slice(0, 5).map(([type, count]) => (
+                      <div key={type} className="flex justify-between items-center bg-gray-700 rounded-lg px-3 py-2">
+                        <span className="text-gray-300">{type}</span>
+                        <span className="text-white font-medium">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Main Actions - 4 colonne */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
           {/* Cards Sync */}
           <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
             <div className="flex items-center mb-4">
@@ -306,7 +457,7 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* NUOVO: Combo Seeding */}
+          {/* Combo Seeding */}
           <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
             <div className="flex items-center mb-4">
               <div className="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center mr-4">
@@ -320,7 +471,7 @@ export default function AdminPage() {
             
             <div className="bg-gray-700 rounded-lg p-3 mb-4 text-xs">
               <div className="text-gray-300">
-                Popola il database con combo curate manualmente per iniziare subito a testare le funzioni.
+                Popola il database con combo curate manualmente.
               </div>
             </div>
             
@@ -336,77 +487,111 @@ export default function AdminPage() {
               {seedingCombos ? 'Seeding...' : 'Seed Database'}
             </button>
           </div>
+
+          {/* NUOVO: Commander Spellbook Import */}
+          <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
+            <div className="flex items-center mb-4">
+              <div className="w-12 h-12 bg-orange-600 rounded-lg flex items-center justify-center mr-4">
+                <span className="text-xl">📚</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">CS Import</h3>
+                <p className="text-gray-400 text-xs">150+ combo</p>
+              </div>
+            </div>
+            
+            <div className="bg-gray-700 rounded-lg p-3 mb-4 text-xs">
+              <div className="text-gray-300">
+                Importa combo di qualità da Commander Spellbook.
+              </div>
+            </div>
+            
+            <button
+              onClick={runCommanderSpellbookImport}
+              disabled={importingCombos}
+              className={`w-full font-medium py-2 px-4 rounded-lg transition-colors text-sm ${
+                importingCombos
+                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  : 'bg-orange-600 hover:bg-orange-500 text-white'
+              }`}
+            >
+              {importingCombos ? 'Importing...' : 'Import Combos'}
+            </button>
+          </div>
         </div>
 
-        {/* Seeding Result Details */}
-        {seedingResult && (
-          <div className={`mb-6 p-6 rounded-2xl border ${
-            seedingResult.success
-              ? 'bg-green-900/20 border-green-500'
-              : 'bg-red-900/20 border-red-500'
-          }`}>
-            <h3 className={`text-lg font-bold mb-4 ${
-              seedingResult.success ? 'text-green-100' : 'text-red-100'
+        {/* Results Sections */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Seeding Results */}
+          {seedingResult && (
+            <div className={`p-6 rounded-2xl border ${
+              seedingResult.success
+                ? 'bg-green-900/20 border-green-500'
+                : 'bg-red-900/20 border-red-500'
             }`}>
-              Risultato Seeding
-            </h3>
-            
-            {seedingResult.success && seedingResult.stats && (
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-100">
-                    {seedingResult.stats.combos_created}
-                  </div>
-                  <div className="text-green-300 text-sm">Combo create</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-100">
-                    {seedingResult.stats.cards_created}
-                  </div>
-                  <div className="text-green-300 text-sm">Carte create</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-100">
-                    {seedingResult.stats.relationships_created}
-                  </div>
-                  <div className="text-green-300 text-sm">Relazioni</div>
-                </div>
-              </div>
-            )}
-            
-            {seedingResult.errors && seedingResult.errors.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-red-200 font-medium mb-2">Errori:</h4>
-                <div className="bg-red-900/30 rounded-lg p-3 max-h-32 overflow-y-auto">
-                  {seedingResult.errors.map((error, i) => (
-                    <div key={i} className="text-red-200 text-sm mb-1">{error}</div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {seedingResult.log && seedingResult.log.length > 0 && (
-              <div>
-                <h4 className={`font-medium mb-2 ${
-                  seedingResult.success ? 'text-green-200' : 'text-red-200'
-                }`}>
-                  Log dettagliato:
-                </h4>
-                <div className={`rounded-lg p-3 max-h-48 overflow-y-auto text-sm ${
-                  seedingResult.success ? 'bg-green-900/30' : 'bg-red-900/30'
-                }`}>
-                  {seedingResult.log.map((logEntry, i) => (
-                    <div key={i} className={`mb-1 ${
-                      seedingResult.success ? 'text-green-100' : 'text-red-100'
-                    }`}>
-                      {logEntry}
+              <h3 className={`text-lg font-bold mb-4 ${
+                seedingResult.success ? 'text-green-100' : 'text-red-100'
+              }`}>
+                Risultato Seeding
+              </h3>
+              
+              {seedingResult.success && seedingResult.stats && (
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-green-100">
+                      {seedingResult.stats.combos_created}
                     </div>
-                  ))}
+                    <div className="text-green-300 text-xs">Combo</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-green-100">
+                      {seedingResult.stats.cards_created}
+                    </div>
+                    <div className="text-green-300 text-xs">Carte</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-green-100">
+                      {seedingResult.stats.relationships_created}
+                    </div>
+                    <div className="text-green-300 text-xs">Relazioni</div>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+
+          {/* Import Results */}
+          {importResult && (
+            <div className={`p-6 rounded-2xl border ${
+              importResult.success
+                ? 'bg-orange-900/20 border-orange-500'
+                : 'bg-red-900/20 border-red-500'
+            }`}>
+              <h3 className={`text-lg font-bold mb-4 ${
+                importResult.success ? 'text-orange-100' : 'text-red-100'
+              }`}>
+                Risultato Import Commander Spellbook
+              </h3>
+              
+              {importResult.success && importResult.stats && (
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-orange-100">
+                      {importResult.stats.imported}
+                    </div>
+                    <div className="text-orange-300 text-xs">Importate</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-orange-100">
+                      {importResult.stats.total_fetched}
+                    </div>
+                    <div className="text-orange-300 text-xs">Totali API</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Recent Logs */}
         {info?.logs && (
