@@ -2,7 +2,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import CardPreview from '../components/CardPreview'
+import CardPreview from '../../components/CardPreview'
 
 interface Card {
   id: string
