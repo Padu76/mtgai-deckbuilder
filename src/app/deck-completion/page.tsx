@@ -100,8 +100,9 @@ export default function DeckCompletionPage() {
       const data = await response.json()
       if (data.ok) {
         setAnalysis(data)
-        // Seleziona automaticamente tutti i suggerimenti - FIXED TYPE ERROR
-        const allSuggestionIds = new Set<string>(data.suggested_cards.map((card: DeckCard) => card.id))
+        // Seleziona automaticamente tutti i suggerimenti - TYPE SAFE VERSION
+        const suggestionIds: string[] = data.suggested_cards.map((card: DeckCard) => card.id)
+        const allSuggestionIds = new Set<string>(suggestionIds)
         setSelectedSuggestions(allSuggestionIds)
       } else {
         alert('Errore: ' + data.error)
@@ -126,7 +127,7 @@ export default function DeckCompletionPage() {
     })
   }
 
-  const getSelectedCards = () => {
+  const getSelectedCards = (): DeckCard[] => {
     if (!analysis) return []
     return analysis.suggested_cards.filter(card => selectedSuggestions.has(card.id))
   }
@@ -170,7 +171,7 @@ export default function DeckCompletionPage() {
     }
   }
 
-  const getCategoryIcon = (category: string) => {
+  const getCategoryIcon = (category: string): string => {
     const icons: {[key: string]: string} = {
       'lands': '🏔️',
       'removal': '⚔️',
@@ -185,7 +186,7 @@ export default function DeckCompletionPage() {
     return icons[category] || '🎴'
   }
 
-  const groupSuggestionsByCategory = (suggestions: DeckCard[]) => {
+  const groupSuggestionsByCategory = (suggestions: DeckCard[]): {[key: string]: DeckCard[]} => {
     const grouped: {[key: string]: DeckCard[]} = {}
     suggestions.forEach(card => {
       const category = card.role
@@ -208,6 +209,16 @@ export default function DeckCompletionPage() {
       total: totalCards + selectedCount,
       target: targetCards
     }
+  }
+
+  const selectAllSuggestions = () => {
+    if (!analysis) return
+    const allIds: string[] = analysis.suggested_cards.map(c => c.id)
+    setSelectedSuggestions(new Set<string>(allIds))
+  }
+
+  const deselectAllSuggestions = () => {
+    setSelectedSuggestions(new Set<string>())
   }
 
   const stats = getCurrentStats()
@@ -241,14 +252,14 @@ export default function DeckCompletionPage() {
               <h3 className="text-lg font-bold text-white mb-3">Formato</h3>
               <div className="space-y-2">
                 {[
-                  { value: 'standard', name: 'Standard (60)', target: 60 },
-                  { value: 'historic', name: 'Historic (60)', target: 60 },
-                  { value: 'brawl', name: 'Brawl (100)', target: 100 }
+                  { value: 'standard' as const, name: 'Standard (60)', target: 60 },
+                  { value: 'historic' as const, name: 'Historic (60)', target: 60 },
+                  { value: 'brawl' as const, name: 'Brawl (100)', target: 100 }
                 ].map(f => (
                   <button
                     key={f.value}
                     onClick={() => {
-                      setFormat(f.value as any)
+                      setFormat(f.value)
                       setTargetCards(f.target)
                     }}
                     className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
@@ -412,13 +423,13 @@ export default function DeckCompletionPage() {
                 </h3>
                 <div className="flex space-x-3">
                   <button
-                    onClick={() => setSelectedSuggestions(new Set<string>(analysis.suggested_cards.map(c => c.id)))}
+                    onClick={selectAllSuggestions}
                     className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors"
                   >
                     Seleziona Tutto
                   </button>
                   <button
-                    onClick={() => setSelectedSuggestions(new Set<string>())}
+                    onClick={deselectAllSuggestions}
                     className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
                   >
                     Deseleziona Tutto
@@ -493,9 +504,9 @@ export default function DeckCompletionPage() {
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
-                {getFinalDeck().main.map(card => (
+                {getFinalDeck().main.map((card, index) => (
                   <CardPreview
-                    key={`final-${card.id}`}
+                    key={`final-${card.id}-${index}`}
                     card={card}
                     showQuantity={true}
                     quantity={card.quantity}
