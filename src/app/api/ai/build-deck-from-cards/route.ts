@@ -385,27 +385,32 @@ function generateManaBase(colors: string[], format: string, targetCards: number)
     'W': {
       id: 'plains', name: 'Plains', mana_cost: '', mana_value: 0,
       colors: [], color_identity: [], types: ['Basic', 'Land'],
-      oracle_text: '{T}: Add {W}.', rarity: 'common', set_code: 'UNF', image_url: null
+      oracle_text: '{T}: Add {W}.', power: null, toughness: null,
+      rarity: 'common', set_code: 'UNF', image_url: null
     },
     'U': {
       id: 'island', name: 'Island', mana_cost: '', mana_value: 0,
       colors: [], color_identity: [], types: ['Basic', 'Land'],
-      oracle_text: '{T}: Add {U}.', rarity: 'common', set_code: 'UNF', image_url: null
+      oracle_text: '{T}: Add {U}.', power: null, toughness: null,
+      rarity: 'common', set_code: 'UNF', image_url: null
     },
     'B': {
       id: 'swamp', name: 'Swamp', mana_cost: '', mana_value: 0,
       colors: [], color_identity: [], types: ['Basic', 'Land'],
-      oracle_text: '{T}: Add {B}.', rarity: 'common', set_code: 'UNF', image_url: null
+      oracle_text: '{T}: Add {B}.', power: null, toughness: null,
+      rarity: 'common', set_code: 'UNF', image_url: null
     },
     'R': {
       id: 'mountain', name: 'Mountain', mana_cost: '', mana_value: 0,
       colors: [], color_identity: [], types: ['Basic', 'Land'],
-      oracle_text: '{T}: Add {R}.', rarity: 'common', set_code: 'UNF', image_url: null
+      oracle_text: '{T}: Add {R}.', power: null, toughness: null,
+      rarity: 'common', set_code: 'UNF', image_url: null
     },
     'G': {
       id: 'forest', name: 'Forest', mana_cost: '', mana_value: 0,
       colors: [], color_identity: [], types: ['Basic', 'Land'],
-      oracle_text: '{T}: Add {G}.', rarity: 'common', set_code: 'UNF', image_url: null
+      oracle_text: '{T}: Add {G}.', power: null, toughness: null,
+      rarity: 'common', set_code: 'UNF', image_url: null
     }
   }
 
