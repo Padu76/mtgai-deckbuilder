@@ -1,9 +1,17 @@
 // src/app/new-sets-combos/page.tsx
-// Pagina per analisi combo delle nuove espansioni
+// Pagina con caricamento dinamico delle espansioni recenti da Scryfall
 
 'use client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+
+interface RecentSet {
+  code: string
+  name: string
+  released_at: string
+  set_type: string
+  icon_svg_uri?: string
+}
 
 interface NewSetsResult {
   success: boolean
@@ -34,27 +42,60 @@ interface ComboResult {
   }[]
 }
 
-const RECENT_SETS = [
-  { code: 'ltr', name: 'The Lord of the Rings', released: '2023-06-23' },
-  { code: 'mom', name: 'March of the Machine', released: '2023-04-21' },
-  { code: 'one', name: 'Phyrexia: All Will Be One', released: '2023-02-10' },
-  { code: 'bro', name: 'The Brothers\' War', released: '2022-11-18' },
-  { code: 'dmu', name: 'Dominaria United', released: '2022-09-09' },
-  { code: 'snc', name: 'Streets of New Capenna', released: '2022-04-29' }
-]
-
 export default function NewSetsCombosPage() {
+  const [recentSets, setRecentSets] = useState<RecentSet[]>([])
   const [selectedExpansions, setSelectedExpansions] = useState<number>(3)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [isLoadingSets, setIsLoadingSets] = useState(true)
   const [analysisResult, setAnalysisResult] = useState<NewSetsResult | null>(null)
   const [discoveredCombos, setDiscoveredCombos] = useState<ComboResult[]>([])
   const [filterType, setFilterType] = useState<'all' | 'internal' | 'cross'>('all')
   const [showLogs, setShowLogs] = useState(false)
 
   useEffect(() => {
-    // Carica combo esistenti dalle nuove espansioni al mount
+    loadRecentSets()
     loadExistingNewSetsCombos()
   }, [])
+
+  const loadRecentSets = async () => {
+    try {
+      setIsLoadingSets(true)
+      const response = await fetch('https://api.scryfall.com/sets', {
+        headers: { 'User-Agent': 'MTGArenaAI-DeckBuilder/1.0' }
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Scryfall API error: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      
+      // Filtra per expansion sets recenti e ordina per data release
+      const expansionSets = data.data
+        .filter((set: any) => 
+          set.set_type === 'expansion' && 
+          new Date(set.released_at) > new Date('2023-01-01') // Solo set molto recenti
+        )
+        .sort((a: any, b: any) => 
+          new Date(b.released_at).getTime() - new Date(a.released_at).getTime()
+        )
+        .slice(0, 10) // Prime 10 espansioni più recenti
+      
+      setRecentSets(expansionSets)
+    } catch (error) {
+      console.error('Error loading recent sets:', error)
+      // Fallback con alcuni set noti recenti se l'API fallisce
+      setRecentSets([
+        { code: 'otj', name: 'Outlaws of Thunder Junction', released_at: '2024-04-19', set_type: 'expansion' },
+        { code: 'mkm', name: 'Murders at Karlov Manor', released_at: '2024-02-09', set_type: 'expansion' },
+        { code: 'lci', name: 'The Lost Caverns of Ixalan', released_at: '2023-11-17', set_type: 'expansion' },
+        { code: 'woe', name: 'Wilds of Eldraine', released_at: '2023-09-08', set_type: 'expansion' },
+        { code: 'ltr', name: 'The Lord of the Rings', released_at: '2023-06-23', set_type: 'expansion' }
+      ])
+    } finally {
+      setIsLoadingSets(false)
+    }
+  }
 
   const loadExistingNewSetsCombos = async () => {
     try {
@@ -87,7 +128,7 @@ export default function NewSetsCombosPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          adminKey: 'user-analysis', // Versione pubblica
+          adminKey: process.env.NEXT_PUBLIC_ADMIN_KEY, // Usa chiave admin reale
           expansionsCount: selectedExpansions
         })
       })
@@ -132,6 +173,14 @@ export default function NewSetsCombosPage() {
     return 'bg-purple-500/20 text-purple-400 border-purple-500/30' // Multi-color
   }
 
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('it-IT', { 
+      year: 'numeric', 
+      month: 'short' 
+    })
+  }
+
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <div className="container mx-auto px-4 py-8">
@@ -172,32 +221,48 @@ export default function NewSetsCombosPage() {
                 <option value={1}>Ultima espansione</option>
                 <option value={2}>Ultime 2 espansioni</option>
                 <option value={3}>Ultime 3 espansioni</option>
+                <option value={4}>Ultime 4 espansioni</option>
+                <option value={5}>Ultime 5 espansioni</option>
               </select>
               <p className="text-xs text-gray-500 mt-1">
                 Più espansioni = più combo scoperte
               </p>
             </div>
 
-            {/* Ultime Espansioni */}
+            {/* Espansioni Recenti Dinamiche */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Espansioni Recenti
+                Espansioni da Analizzare
               </label>
-              <div className="space-y-1">
-                {RECENT_SETS.slice(0, selectedExpansions).map((set, index) => (
-                  <div key={set.code} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-300">{set.name}</span>
-                    <span className="text-gray-500 text-xs">{set.code.toUpperCase()}</span>
-                  </div>
-                ))}
-              </div>
+              {isLoadingSets ? (
+                <div className="flex items-center justify-center h-20">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                  <span className="ml-2 text-sm text-gray-400">Caricando sets...</span>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-20 overflow-y-auto">
+                  {recentSets.slice(0, selectedExpansions).map((set, index) => (
+                    <div key={set.code} className="flex items-center justify-between text-sm bg-gray-700/50 rounded p-2">
+                      <div>
+                        <span className="text-gray-300 font-medium">{set.name}</span>
+                        <div className="text-gray-500 text-xs">
+                          {set.code.toUpperCase()} • {formatDate(set.released_at)}
+                        </div>
+                      </div>
+                      <div className={`w-2 h-2 rounded-full ${
+                        index === 0 ? 'bg-green-400' : index === 1 ? 'bg-yellow-400' : 'bg-blue-400'
+                      }`} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Azione */}
             <div className="flex items-end">
               <button
                 onClick={handleAnalyzeNewSets}
-                disabled={isAnalyzing}
+                disabled={isAnalyzing || isLoadingSets}
                 className="w-full bg-gradient-to-r from-red-600 to-orange-600 text-white font-medium py-3 px-6 rounded-lg hover:from-red-700 hover:to-orange-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isAnalyzing ? (
@@ -211,6 +276,17 @@ export default function NewSetsCombosPage() {
               </button>
             </div>
           </div>
+
+          {/* Sets Info */}
+          {!isLoadingSets && recentSets.length > 0 && (
+            <div className="mt-4 p-3 bg-gray-700/30 rounded">
+              <p className="text-sm text-gray-400">
+                Trovate {recentSets.length} espansioni recenti. 
+                L'ultima: <span className="text-white font-medium">{recentSets[0]?.name}</span> 
+                ({formatDate(recentSets[0]?.released_at)})
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Analysis Results */}
@@ -269,6 +345,19 @@ export default function NewSetsCombosPage() {
                     {analysisResult.stats.existing_cards_matched}
                   </div>
                   <div className="text-xs text-gray-400">Carte Esistenti</div>
+                </div>
+              </div>
+            )}
+
+            {analysisResult.sets_analyzed && (
+              <div className="mt-4">
+                <h4 className="text-sm font-medium text-gray-300 mb-2">Set Analizzati:</h4>
+                <div className="flex gap-2 flex-wrap">
+                  {analysisResult.sets_analyzed.map(setCode => (
+                    <span key={setCode} className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded text-xs">
+                      {setCode.toUpperCase()}
+                    </span>
+                  ))}
                 </div>
               </div>
             )}
@@ -344,7 +433,8 @@ export default function NewSetsCombosPage() {
             {discoveredCombos.length === 0 && (
               <button
                 onClick={handleAnalyzeNewSets}
-                className="bg-gradient-to-r from-red-600 to-orange-600 text-white px-6 py-3 rounded-lg hover:from-red-700 hover:to-orange-700 transition-all"
+                disabled={isLoadingSets}
+                className="bg-gradient-to-r from-red-600 to-orange-600 text-white px-6 py-3 rounded-lg hover:from-red-700 hover:to-orange-700 transition-all disabled:opacity-50"
               >
                 Inizia Analisi
               </button>
