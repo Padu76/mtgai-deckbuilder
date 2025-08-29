@@ -1,16 +1,20 @@
 // src/lib/scryfall-enhanced.ts
-// Enhanced Scryfall integration per immagini e nomi italiani
+// Enhanced Scryfall integration per immagini e nomi italiani - VERSIONE CORRETTA
 
 interface ScryfallCard {
   id: string
+  oracle_id: string
   name: string
+  printed_name?: string
   lang: string
   mana_cost?: string
   cmc?: number
   colors?: string[]
   color_identity?: string[]
   type_line?: string
+  printed_type_line?: string
   oracle_text?: string
+  printed_text?: string
   flavor_text?: string
   keywords?: string[]
   produced_mana?: string[]
@@ -31,7 +35,6 @@ interface ScryfallCard {
   arena_id?: number
   uri: string
   scryfall_uri: string
-  printed_name?: string
 }
 
 interface LocalizedCardData {
@@ -40,6 +43,7 @@ interface LocalizedCardData {
   merged: {
     id: string
     scryfall_id: string
+    oracle_id: string
     name: string
     name_it?: string
     oracle_text: string
@@ -76,12 +80,13 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 /**
  * Fetch card data in both English and Italian from Scryfall
+ * METODO CORRETTO: usa oracle_id per matchare le traduzioni
  */
 export async function fetchCardWithLocalizations(
   scryfallId: string
 ): Promise<LocalizedCardData | null> {
   try {
-    // Fetch English version
+    // Step 1: Fetch English version
     const englishResponse = await fetch(`${SCRYFALL_API_BASE}/cards/${scryfallId}?format=json`, {
       headers: { 'User-Agent': 'MTGArenaAI-DeckBuilder/1.0' }
     })
@@ -93,25 +98,29 @@ export async function fetchCardWithLocalizations(
     const english: ScryfallCard = await englishResponse.json()
     await sleep(RATE_LIMIT_DELAY)
     
-    // Try to fetch Italian version
+    // Step 2: Search for Italian version using oracle_id
     let italian: ScryfallCard | undefined
     
     try {
-      const italianResponse = await fetch(
-        `${SCRYFALL_API_BASE}/cards/${scryfallId}/it?format=json`,
-        {
-          headers: { 'User-Agent': 'MTGArenaAI-DeckBuilder/1.0' }
-        }
-      )
+      const italianSearchUrl = `${SCRYFALL_API_BASE}/cards/search?q=oracle_id:${english.oracle_id}+lang:it&unique=prints`
+      const italianResponse = await fetch(italianSearchUrl, {
+        headers: { 'User-Agent': 'MTGArenaAI-DeckBuilder/1.0' }
+      })
       
       if (italianResponse.ok) {
-        italian = await italianResponse.json()
+        const italianData = await italianResponse.json()
+        if (italianData.data && italianData.data.length > 0) {
+          // Prendi la prima versione italiana trovata
+          italian = italianData.data[0]
+        }
       }
     } catch (error) {
-      console.log(`No Italian translation available for ${english.name}`)
+      console.log(`No Italian translation found for ${english.name} (oracle_id: ${english.oracle_id})`)
     }
     
-    // Merge data
+    await sleep(RATE_LIMIT_DELAY)
+    
+    // Step 3: Merge data
     const merged = mergeCardLocalizations(english, italian)
     
     return {
@@ -181,6 +190,51 @@ export async function searchArenaCards(
     console.error('Search error:', error)
     return []
   }
+}
+
+/**
+ * Batch search for Italian cards using oracle_ids
+ * NUOVO METODO: cerca direttamente carte italiane
+ */
+export async function searchItalianCardsByOracleIds(
+  oracleIds: string[]
+): Promise<{ [oracleId: string]: ScryfallCard }> {
+  const italianCards: { [oracleId: string]: ScryfallCard } = {}
+  
+  // Batch search per gruppi di 75 oracle_ids (limite Scryfall)
+  const batchSize = 75
+  for (let i = 0; i < oracleIds.length; i += batchSize) {
+    const batch = oracleIds.slice(i, i + batchSize)
+    
+    try {
+      // Crea query OR con tutti gli oracle_id del batch
+      const oracleQuery = batch.map(id => `oracle_id:${id}`).join(' OR ')
+      const searchUrl = `${SCRYFALL_API_BASE}/cards/search?q=(${oracleQuery})+lang:it&unique=prints`
+      
+      const response = await fetch(searchUrl, {
+        headers: { 'User-Agent': 'MTGArenaAI-DeckBuilder/1.0' }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.data && Array.isArray(data.data)) {
+          // Mappa ogni carta italiana al suo oracle_id
+          for (const card of data.data) {
+            if (!italianCards[card.oracle_id]) {
+              italianCards[card.oracle_id] = card
+            }
+          }
+        }
+      }
+      
+      await sleep(RATE_LIMIT_DELAY)
+      
+    } catch (error) {
+      console.error(`Error searching Italian cards batch ${i}-${i + batchSize}:`, error)
+    }
+  }
+  
+  return italianCards
 }
 
 /**
@@ -285,6 +339,7 @@ export async function getRandomArenaCards(count: number = 10): Promise<Localized
 
 /**
  * Merge English and Italian card data
+ * VERSIONE CORRETTA: usa printed_name dal campo della carta italiana
  */
 function mergeCardLocalizations(
   english: ScryfallCard, 
@@ -297,11 +352,14 @@ function mergeCardLocalizations(
   return {
     id: english.id,
     scryfall_id: english.id,
+    oracle_id: english.oracle_id,
     name: english.name,
+    // CORREZIONE: usa printed_name dalla carta italiana
     name_it: italian?.printed_name || italian?.name,
     oracle_text: english.oracle_text || '',
     flavor_text: english.flavor_text,
-    flavor_text_it: italian?.flavor_text,
+    // CORREZIONE: usa printed_text per flavor text italiano  
+    flavor_text_it: italian?.printed_text?.split('\n').pop(), // Ultimo paragrafo spesso è flavor text
     mana_cost: english.mana_cost,
     cmc: english.cmc,
     colors: english.colors || [],
@@ -339,7 +397,7 @@ export function needsScryfallSync(lastSyncDate?: string | null): boolean {
 }
 
 /**
- * Batch process cards for localization
+ * Batch process cards for localization - VERSIONE OTTIMIZZATA
  */
 export async function batchLocalizeCards(
   scryfallIds: string[],
@@ -347,22 +405,44 @@ export async function batchLocalizeCards(
 ): Promise<LocalizedCardData[]> {
   const results: LocalizedCardData[] = []
   
+  // Step 1: Fetch tutte le carte inglesi
+  const englishCards: ScryfallCard[] = []
   for (let i = 0; i < scryfallIds.length; i++) {
     try {
-      const localized = await fetchCardWithLocalizations(scryfallIds[i])
-      if (localized) {
-        results.push(localized)
+      const response = await fetch(`${SCRYFALL_API_BASE}/cards/${scryfallIds[i]}`, {
+        headers: { 'User-Agent': 'MTGArenaAI-DeckBuilder/1.0' }
+      })
+      
+      if (response.ok) {
+        const card = await response.json()
+        englishCards.push(card)
       }
+      
+      await sleep(RATE_LIMIT_DELAY)
       
       if (onProgress) {
         onProgress(i + 1, scryfallIds.length)
       }
       
-      await sleep(RATE_LIMIT_DELAY)
-      
     } catch (error) {
-      console.error(`Error localizing card ${scryfallIds[i]}:`, error)
+      console.error(`Error fetching English card ${scryfallIds[i]}:`, error)
     }
+  }
+  
+  // Step 2: Batch search per carte italiane usando oracle_ids
+  const oracleIds = englishCards.map(card => card.oracle_id)
+  const italianCards = await searchItalianCardsByOracleIds(oracleIds)
+  
+  // Step 3: Merge dei dati
+  for (const englishCard of englishCards) {
+    const italianCard = italianCards[englishCard.oracle_id]
+    const merged = mergeCardLocalizations(englishCard, italianCard)
+    
+    results.push({
+      english: englishCard,
+      italian: italianCard,
+      merged
+    })
   }
   
   return results
@@ -374,6 +454,7 @@ export async function batchLocalizeCards(
 export function validateCardData(cardData: LocalizedCardData['merged']): boolean {
   return !!(
     cardData.scryfall_id &&
+    cardData.oracle_id &&
     cardData.name &&
     cardData.set_code &&
     cardData.scryfall_uri
