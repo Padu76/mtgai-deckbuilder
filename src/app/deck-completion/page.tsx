@@ -55,7 +55,7 @@ export default function DeckCompletionPage() {
   const [currentDeck, setCurrentDeck] = useState<{main: DeckCard[], side?: DeckCard[]}>({main: []})
   const [loading, setLoading] = useState(false)
   const [analysis, setAnalysis] = useState<CompletionResult | null>(null)
-  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set())
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set<string>())
   const [format, setFormat] = useState<'standard' | 'historic' | 'brawl'>('historic')
   const [targetCards, setTargetCards] = useState(60)
 
@@ -100,8 +100,8 @@ export default function DeckCompletionPage() {
       const data = await response.json()
       if (data.ok) {
         setAnalysis(data)
-        // Seleziona automaticamente tutti i suggerimenti
-        const allSuggestionIds = new Set(data.suggested_cards.map((card: DeckCard) => card.id))
+        // Seleziona automaticamente tutti i suggerimenti - FIXED TYPE ERROR
+        const allSuggestionIds = new Set<string>(data.suggested_cards.map((card: DeckCard) => card.id))
         setSelectedSuggestions(allSuggestionIds)
       } else {
         alert('Errore: ' + data.error)
@@ -116,7 +116,7 @@ export default function DeckCompletionPage() {
 
   const toggleSuggestion = (cardId: string) => {
     setSelectedSuggestions(prev => {
-      const newSet = new Set(prev)
+      const newSet = new Set<string>(prev)
       if (newSet.has(cardId)) {
         newSet.delete(cardId)
       } else {
@@ -412,13 +412,13 @@ export default function DeckCompletionPage() {
                 </h3>
                 <div className="flex space-x-3">
                   <button
-                    onClick={() => setSelectedSuggestions(new Set(analysis.suggested_cards.map(c => c.id)))}
+                    onClick={() => setSelectedSuggestions(new Set<string>(analysis.suggested_cards.map(c => c.id)))}
                     className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors"
                   >
                     Seleziona Tutto
                   </button>
                   <button
-                    onClick={() => setSelectedSuggestions(new Set())}
+                    onClick={() => setSelectedSuggestions(new Set<string>())}
                     className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
                   >
                     Deseleziona Tutto
