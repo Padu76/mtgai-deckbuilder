@@ -2,21 +2,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
-import { 
-  Upload, 
-  Wand2, 
-  Download, 
-  AlertCircle, 
-  CheckCircle2,
-  TrendingUp,
-  Zap,
-  Target
-} from 'lucide-react'
 
 interface DeckCard {
   name: string
@@ -106,7 +91,7 @@ export default function DeckOptimizerPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           deck_cards: parsed,
-          format: 'standard', // TODO: permettere selezione formato
+          format: 'standard',
           optimization_goals: ['consistency', 'power_level', 'mana_curve']
         })
       })
@@ -176,6 +161,15 @@ export default function DeckOptimizerPage() {
 
   const totalCards = parsedDeck.reduce((sum, card) => sum + card.quantity, 0)
 
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high': return 'bg-red-500/20 text-red-400 border-red-500/30'
+      case 'medium': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+      case 'low': return 'bg-green-500/20 text-green-400 border-green-500/30'
+      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-purple-900 to-slate-900 p-4">
       <div className="max-w-7xl mx-auto">
@@ -191,16 +185,15 @@ export default function DeckOptimizerPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Input Panel */}
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <Upload className="w-5 h-5" />
-                Inserisci Deck List
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-2xl">📤</span>
+              <h2 className="text-xl font-bold text-white">Inserisci Deck List</h2>
+            </div>
+            
+            <div className="space-y-4">
               <div>
-                <Textarea
+                <textarea
                   placeholder={`Esempi di formato supportato:
 4 Lightning Bolt
 3 Counterspell
@@ -213,40 +206,40 @@ Counterspell
 Serra Angel`}
                   value={deckList}
                   onChange={(e) => setDeckList(e.target.value)}
-                  className="bg-slate-900/50 border-slate-600 text-white min-h-[300px] font-mono"
+                  className="w-full bg-slate-900/50 border border-slate-600 text-white rounded-lg p-4 min-h-[300px] font-mono text-sm resize-none focus:border-purple-500 focus:outline-none"
                 />
               </div>
               
               {error && (
-                <div className="flex items-center gap-2 text-red-400 bg-red-900/20 p-3 rounded-lg">
-                  <AlertCircle className="w-4 h-4" />
+                <div className="flex items-center gap-2 text-red-400 bg-red-900/20 p-3 rounded-lg border border-red-500/30">
+                  <span>⚠️</span>
                   {error}
                 </div>
               )}
 
-              <div className="flex gap-3">
-                <Button 
+              <div>
+                <button 
                   onClick={analyzeDeck}
                   disabled={isAnalyzing || !deckList.trim()}
-                  className="flex-1 bg-purple-600 hover:bg-purple-700"
+                  className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-400 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                   {isAnalyzing ? (
                     <>
-                      <Wand2 className="w-4 h-4 mr-2 animate-spin" />
+                      <span className="animate-spin">🪄</span>
                       Analizzando...
                     </>
                   ) : (
                     <>
-                      <Wand2 className="w-4 h-4 mr-2" />
+                      <span>🪄</span>
                       Ottimizza Deck
                     </>
                   )}
-                </Button>
+                </button>
               </div>
 
               {/* Stats rapide */}
               {parsedDeck.length > 0 && (
-                <div className="bg-slate-900/30 p-4 rounded-lg">
+                <div className="bg-slate-900/30 p-4 rounded-lg border border-slate-700/50">
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="text-slate-400">Carte totali:</span>
@@ -264,135 +257,126 @@ Serra Angel`}
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Analysis Panel */}
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <TrendingUp className="w-5 h-5" />
-                Analisi Deck
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!analysis ? (
-                <div className="text-center py-12 text-slate-400">
-                  <Target className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Inserisci una deck list per vedere l'analisi AI</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* Scores */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-slate-900/30 p-4 rounded-lg text-center">
-                      <div className="text-2xl font-bold text-blue-400">
-                        {analysis.power_level}/10
-                      </div>
-                      <div className="text-sm text-slate-300">Power Level</div>
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-2xl">📊</span>
+              <h2 className="text-xl font-bold text-white">Analisi Deck</h2>
+            </div>
+            
+            {!analysis ? (
+              <div className="text-center py-12 text-slate-400">
+                <span className="text-6xl opacity-50 mb-4 block">🎯</span>
+                <p>Inserisci una deck list per vedere l'analisi AI</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Scores */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-slate-900/30 p-4 rounded-lg text-center border border-slate-700/50">
+                    <div className="text-2xl font-bold text-blue-400">
+                      {analysis.power_level}/10
                     </div>
-                    <div className="bg-slate-900/30 p-4 rounded-lg text-center">
-                      <div className="text-2xl font-bold text-green-400">
-                        {analysis.consistency_score}%
-                      </div>
-                      <div className="text-sm text-slate-300">Consistenza</div>
-                    </div>
+                    <div className="text-sm text-slate-300">Power Level</div>
                   </div>
+                  <div className="bg-slate-900/30 p-4 rounded-lg text-center border border-slate-700/50">
+                    <div className="text-2xl font-bold text-green-400">
+                      {analysis.consistency_score}%
+                    </div>
+                    <div className="text-sm text-slate-300">Consistenza</div>
+                  </div>
+                </div>
 
-                  <Separator className="bg-slate-700" />
+                <div className="h-px bg-slate-700"></div>
 
-                  {/* Suggestions */}
-                  <div>
-                    <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
-                      <Zap className="w-4 h-4" />
-                      Suggerimenti AI ({analysis.suggestions.length})
-                    </h3>
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                      {analysis.suggestions.map((suggestion, index) => (
-                        <div key={index} className="bg-slate-900/40 p-3 rounded-lg">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <Badge variant={
-                                suggestion.priority === 'high' ? 'destructive' :
-                                suggestion.priority === 'medium' ? 'secondary' : 'outline'
-                              }>
-                                {suggestion.type.toUpperCase()}
-                              </Badge>
-                              <span className="text-white font-medium">
-                                {suggestion.quantity}x {suggestion.card}
-                              </span>
-                            </div>
-                            <Button
-                              size="sm"
-                              onClick={() => applySuggestion(suggestion)}
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              <CheckCircle2 className="w-3 h-3 mr-1" />
-                              Applica
-                            </Button>
+                {/* Suggestions */}
+                <div>
+                  <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+                    <span>⚡</span>
+                    Suggerimenti AI ({analysis.suggestions.length})
+                  </h3>
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                    {analysis.suggestions.map((suggestion, index) => (
+                      <div key={index} className="bg-slate-900/40 p-3 rounded-lg border border-slate-700/30">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-1 rounded-full text-xs border ${getPriorityColor(suggestion.priority)}`}>
+                              {suggestion.type.toUpperCase()}
+                            </span>
+                            <span className="text-white font-medium">
+                              {suggestion.quantity}x {suggestion.card}
+                            </span>
                           </div>
-                          <p className="text-slate-300 text-sm">
-                            {suggestion.reason}
-                          </p>
+                          <button
+                            onClick={() => applySuggestion(suggestion)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors flex items-center gap-1"
+                          >
+                            <span>✅</span>
+                            Applica
+                          </button>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Export Section */}
-        {parsedDeck.length > 0 && (
-          <Card className="bg-slate-800/50 border-slate-700 mt-6">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <Download className="w-5 h-5" />
-                Deck Finale
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Deck List */}
-                <div className="lg:col-span-2">
-                  <div className="bg-slate-900/50 p-4 rounded-lg font-mono text-sm max-h-[300px] overflow-y-auto">
-                    {parsedDeck.map((card, index) => (
-                      <div 
-                        key={index} 
-                        className={`${card.is_suggested ? 'text-green-400' : 'text-white'}`}
-                      >
-                        {card.quantity} {card.name}
-                        {card.is_suggested && <span className="ml-2 text-xs">(suggerita)</span>}
+                        <p className="text-slate-300 text-sm">
+                          {suggestion.reason}
+                        </p>
                       </div>
                     ))}
                   </div>
                 </div>
+              </div>
+            )}
+          </div>
+        </div>
 
-                {/* Export Actions */}
-                <div className="space-y-3">
-                  <Button 
-                    onClick={exportForArena}
-                    className="w-full bg-orange-600 hover:bg-orange-700"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Copia per Arena
-                  </Button>
-                  
-                  <div className="text-center text-sm text-slate-400">
-                    Totale: {totalCards} carte
-                  </div>
-                  
-                  {totalCards !== 60 && (
-                    <div className="text-center text-xs text-yellow-400">
-                      ⚠️ Standard richiede esattamente 60 carte
+        {/* Export Section */}
+        {parsedDeck.length > 0 && (
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 mt-6">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-2xl">📥</span>
+              <h2 className="text-xl font-bold text-white">Deck Finale</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Deck List */}
+              <div className="lg:col-span-2">
+                <div className="bg-slate-900/50 p-4 rounded-lg font-mono text-sm max-h-[300px] overflow-y-auto border border-slate-700/50">
+                  {parsedDeck.map((card, index) => (
+                    <div 
+                      key={index} 
+                      className={`${card.is_suggested ? 'text-green-400' : 'text-white'} py-1`}
+                    >
+                      {card.quantity} {card.name}
+                      {card.is_suggested && <span className="ml-2 text-xs opacity-75">(suggerita)</span>}
                     </div>
-                  )}
+                  ))}
                 </div>
               </div>
-            </CardContent>
-          </Card>
+
+              {/* Export Actions */}
+              <div className="space-y-3">
+                <button 
+                  onClick={exportForArena}
+                  className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <span>📥</span>
+                  Copia per Arena
+                </button>
+                
+                <div className="text-center text-sm text-slate-400">
+                  Totale: {totalCards} carte
+                </div>
+                
+                {totalCards !== 60 && (
+                  <div className="text-center text-xs text-yellow-400 flex items-center justify-center gap-1">
+                    <span>⚠️</span>
+                    Standard richiede esattamente 60 carte
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
