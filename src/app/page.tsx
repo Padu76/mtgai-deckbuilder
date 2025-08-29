@@ -29,22 +29,25 @@ export default function HomePage() {
 
   const quickActions = [
     {
+      title: 'AI Combo Builder',
+      description: 'L\'AI trova tutte le combo per i tuoi colori',
+      icon: '🧠',
+      color: 'bg-purple-600 hover:bg-purple-500',
+      href: '/combo-builder'
+    },
+    {
       title: 'Crea da Archetipi',
       description: 'Scegli uno stile e lascia che l\'AI costruisca',
       icon: '🎯',
-      color: 'bg-green-600 hover:bg-green-500'
+      color: 'bg-green-600 hover:bg-green-500',
+      href: '/build/standard'
     },
     {
-      title: 'Dalle Mie Carte',
-      description: 'Inserisci carte che vuoi giocare',
-      icon: '🃏', 
-      color: 'bg-orange-600 hover:bg-orange-500'
-    },
-    {
-      title: 'Meta Snapshot',
-      description: 'Deck competitivi del momento',
-      icon: '📊',
-      color: 'bg-blue-600 hover:bg-blue-500'
+      title: 'Esplora Combo',
+      description: 'Database combo infinite e sinergie',
+      icon: '💫', 
+      color: 'bg-orange-600 hover:bg-orange-500',
+      href: '/combos'
     }
   ]
 
@@ -62,11 +65,15 @@ export default function HomePage() {
             </div>
             
             <nav className="hidden md:flex items-center space-x-6">
-              <Link href="/decks" className="text-gray-300 hover:text-white transition-colors">
-                I Miei Deck
+              <Link href="/combo-builder" className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1">
+                <span>🧠</span>
+                <span>AI Combo</span>
               </Link>
               <Link href="/combos" className="text-gray-300 hover:text-white transition-colors">
-                Combo
+                Combo Database
+              </Link>
+              <Link href="/decks" className="text-gray-300 hover:text-white transition-colors">
+                I Miei Deck
               </Link>
               <Link href="/admin" className="text-gray-300 hover:text-white transition-colors">
                 Admin
@@ -96,6 +103,23 @@ export default function HomePage() {
             L'intelligenza artificiale ti aiuta a creare mazzi legali, ottimizzati e pronti per l'import in MTG Arena. 
             Sinergie automatiche, curve bilanciate, export 1-click.
           </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
+            <Link
+              href="/combo-builder"
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all transform hover:scale-105 hover:shadow-xl flex items-center space-x-2"
+            >
+              <span>🧠</span>
+              <span>Trova Combo con AI</span>
+            </Link>
+            
+            <Link
+              href="/build/standard" 
+              className="bg-gray-700 hover:bg-gray-600 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all border border-gray-600 hover:border-gray-500"
+            >
+              Builder Tradizionale
+            </Link>
+          </div>
         </div>
 
         {/* Format Selection */}
@@ -166,17 +190,18 @@ export default function HomePage() {
           
           <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {quickActions.map((action, idx) => (
-              <button
+              <Link
                 key={idx}
+                href={action.href}
                 className={`
-                  ${action.color} p-6 rounded-xl text-white text-left
+                  ${action.color} p-6 rounded-xl text-white text-left block
                   transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl
                 `}
               >
                 <div className="text-3xl mb-4">{action.icon}</div>
                 <h4 className="font-bold text-lg mb-2">{action.title}</h4>
                 <p className="text-white/80 text-sm">{action.description}</p>
-              </button>
+              </Link>
             ))}
           </div>
         </div>
