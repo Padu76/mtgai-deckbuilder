@@ -100,6 +100,7 @@ export default function ComboBuilderPage() {
   const [availableCombos, setAvailableCombos] = useState<UnifiedCombo[]>([])
   const [selectedCombos, setSelectedCombos] = useState<UnifiedCombo[]>([])
   const [categories, setCategories] = useState<any>({})
+  const [tempDeckId, setTempDeckId] = useState<string>('')
 
   const colorOptions = [
     { code: 'W', name: 'Bianco', symbol: '⚪', description: 'Controllo, lifegain, protezione' },
@@ -128,6 +129,11 @@ export default function ComboBuilderPage() {
     { key: 'state_based_manipulation', name: 'Manipola Stati', icon: '🎛️', description: 'Controlla state-based actions' },
     { key: 'cross_mechanical_synergy', name: 'Sinergie Cross', icon: '🔗', description: 'Mix meccaniche diverse' }
   ]
+
+  // Generate temp deck ID when component mounts
+  useEffect(() => {
+    setTempDeckId(`temp_${Date.now()}`)
+  }, [])
 
   const toggleColor = (color: string) => {
     setFilters(prev => ({
@@ -185,22 +191,32 @@ export default function ComboBuilderPage() {
           setCategories({})
         }
       } else {
-        // Use standard combo analysis
-        const response = await fetch('/api/ai/analyze-combos', {
+        // Use find-combos instead of analyze-combos
+        const response = await fetch('/api/ai/find-combos', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             colors: filters.colors,
+            power_level_min: filters.power_level_min,
+            power_level_max: 10,
+            max_setup_turns: filters.max_setup_turns,
+            max_cards: filters.max_cards_per_combo,
             format: filters.format,
-            max_combos: 30
+            creative_mode: false
           })
         })
 
         const data = await response.json()
         if (data.ok) {
-          combos = (data.combos || []).map((combo: ComboSuggestion) => ({
+          combos = (data.combos || []).map((combo: any) => ({
             ...combo,
-            is_creative: false
+            is_creative: false,
+            cards: combo.cards?.map((cardName: string) => ({
+              id: `card_${cardName.replace(/[^a-zA-Z0-9]/g, '_')}`,
+              name: cardName,
+              mana_cost: '',
+              mana_value: 0
+            })) || []
           }))
           setCategories(data.categories || {})
         }
@@ -230,15 +246,65 @@ export default function ComboBuilderPage() {
     }
   }
 
-  const toggleComboSelection = (combo: UnifiedCombo) => {
-    setSelectedCombos(prev => {
-      const exists = prev.find(c => c.id === combo.id)
-      if (exists) {
-        return prev.filter(c => c.id !== combo.id)
-      } else {
-        return [...prev, combo]
+  const toggleComboSelection = async (combo: UnifiedCombo) => {
+    const newSelectedCombos = selectedCombos.find(c => c.id === combo.id)
+      ? selectedCombos.filter(c => c.id !== combo.id)
+      : [...selectedCombos, combo]
+    
+    setSelectedCombos(newSelectedCombos)
+
+    // Auto-save selected combos to temp deck
+    if (tempDeckId) {
+      try {
+        await saveCombosToTempDeck(newSelectedCombos)
+      } catch (error) {
+        console.warn('Failed to auto-save combo selection:', error)
       }
-    })
+    }
+  }
+
+  const saveCombosToTempDeck = async (combos: UnifiedCombo[]) => {
+    if (!tempDeckId) return
+
+    try {
+      // First try to update existing temp deck
+      const updateResponse = await fetch(`/api/deck/${tempDeckId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          selected_combos: combos,
+          metadata: {
+            format: filters.format,
+            colors: filters.colors,
+            archetype: combos.length > 0 ? combos[0].category : 'mixed'
+          }
+        })
+      })
+
+      if (!updateResponse.ok) {
+        // If update fails, try to create new temp deck
+        const createResponse = await fetch(`/api/deck/${tempDeckId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            selected_combos: combos,
+            metadata: {
+              format: filters.format,
+              colors: filters.colors,
+              archetype: combos.length > 0 ? combos[0].category : 'mixed'
+            }
+          })
+        })
+
+        if (!createResponse.ok) {
+          throw new Error('Failed to create temp deck')
+        }
+      }
+
+      console.log(`Saved ${combos.length} combos to temp deck ${tempDeckId}`)
+    } catch (error) {
+      console.error('Error saving combos to temp deck:', error)
+    }
   }
 
   const buildFinalDeck = async () => {
@@ -249,11 +315,19 @@ export default function ComboBuilderPage() {
 
     setLoading(true)
     try {
+      // First, ensure combos are saved to temp deck
+      await saveCombosToTempDeck(selectedCombos)
+
+      // Wait a moment for the database write to complete
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // Call build-combo-deck with the temp deck ID so it can retrieve the specific combos
       const response = await fetch('/api/ai/build-combo-deck', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          selected_combos: selectedCombos,
+          temp_deck_id: tempDeckId, // Pass temp deck ID for combo retrieval
+          selected_combos: selectedCombos, // Also pass combos directly as fallback
           format: filters.format,
           colors: filters.colors
         })
@@ -727,6 +801,11 @@ export default function ComboBuilderPage() {
             <div className="text-center pt-8">
               <div className="mb-4 text-gray-300">
                 {selectedCombos.length} combo selezionate
+                {tempDeckId && (
+                  <span className="text-xs text-gray-500 block">
+                    Salvate automaticamente in {tempDeckId}
+                  </span>
+                )}
               </div>
               <button
                 onClick={buildFinalDeck}
