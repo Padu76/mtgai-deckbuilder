@@ -1,4 +1,4 @@
-// src/app/admin/page.tsx - Admin dashboard con 6 pulsanti incluso New Sets Analyzer
+// src/app/admin/page.tsx - Admin dashboard con Scryfall Sync integrato
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -29,6 +29,28 @@ interface NewSetsResult {
   total_combos_created: number
 }
 
+interface ScryfallStats {
+  total_cards: number
+  cards_with_italian_names: number
+  cards_with_images: number
+  cards_synced_last_week: number
+  italian_coverage_percentage: number
+}
+
+interface ScryfallSyncResult {
+  success: boolean
+  message: string
+  stats?: {
+    cards_processed: number
+    cards_updated: number
+    cards_with_italian_names: number
+    cards_with_images: number
+    errors: number
+  }
+  errors?: string[]
+  log?: string[]
+}
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -49,9 +71,17 @@ export default function AdminDashboard() {
   const [newSetsResult, setNewSetsResult] = useState<NewSetsResult | null>(null)
   const [newSetsLoading, setNewSetsLoading] = useState(false)
 
+  // Nuovi stati per Scryfall Sync
+  const [scryfallStats, setScryfallStats] = useState<ScryfallStats | null>(null)
+  const [scryfallSyncResult, setScryfallSyncResult] = useState<ScryfallSyncResult | null>(null)
+  const [scryfallSyncLoading, setScryfallSyncLoading] = useState(false)
+  const [syncMode, setSyncMode] = useState<'outdated' | 'all' | 'missing_images' | 'missing_italian'>('outdated')
+  const [syncLogs, setSyncLogs] = useState<string[]>([])
+
   useEffect(() => {
     if (isAuthenticated) {
       loadDatabaseStats()
+      loadScryfallStats()
     }
   }, [isAuthenticated])
 
@@ -60,6 +90,20 @@ export default function AdminDashboard() {
       setIsAuthenticated(true)
     } else {
       alert('Chiave admin non valida')
+    }
+  }
+
+  async function loadScryfallStats() {
+    try {
+      const response = await fetch('/api/admin/sync-scryfall')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.stats) {
+          setScryfallStats(data.stats)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading Scryfall stats:', error)
     }
   }
 
@@ -104,6 +148,40 @@ export default function AdminDashboard() {
       })
     } catch (error) {
       console.error('Error loading stats:', error)
+    }
+  }
+
+  const handleScryfallSync = async () => {
+    setScryfallSyncLoading(true)
+    setScryfallSyncResult(null)
+    setSyncLogs([])
+    
+    try {
+      const response = await fetch('/api/admin/sync-scryfall', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          adminKey,
+          mode: syncMode,
+          limit: 100
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        setScryfallSyncResult(data)
+        setSyncLogs(data.log || [])
+        loadDatabaseStats()
+        loadScryfallStats()
+      } else {
+        alert(`Scryfall sync fallito: ${data.message || 'Errore sconosciuto'}`)
+        setSyncLogs(data.log || [])
+      }
+    } catch (error) {
+      alert(`Errore Scryfall sync: ${error}`)
+    } finally {
+      setScryfallSyncLoading(false)
     }
   }
 
@@ -185,6 +263,16 @@ export default function AdminDashboard() {
     }
   }
 
+  const getSyncModeLabel = (mode: string) => {
+    switch(mode) {
+      case 'all': return 'Tutte le carte'
+      case 'outdated': return 'Obsolete (>7 giorni)'
+      case 'missing_images': return 'Senza immagini'
+      case 'missing_italian': return 'Senza nomi IT'
+      default: return mode
+    }
+  }
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-900 text-white p-8">
@@ -241,6 +329,16 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {scryfallSyncResult && scryfallSyncResult.success && (
+          <div className="bg-cyan-900/30 border border-cyan-500 rounded-lg p-4 mb-6">
+            <p className="text-cyan-400">
+              Scryfall sync completato: {scryfallSyncResult.stats?.cards_updated} carte aggiornate, 
+              {scryfallSyncResult.stats?.cards_with_italian_names} con nomi italiani, 
+              {scryfallSyncResult.stats?.cards_with_images} con immagini
+            </p>
+          </div>
+        )}
+
         {/* Database Statistics */}
         <div className="bg-gray-800 rounded-lg p-6 mb-8">
           <h2 className="text-xl font-semibold mb-4">Database Statistics</h2>
@@ -289,25 +387,47 @@ export default function AdminDashboard() {
         {/* Action Buttons - 6 columns layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
           
-          {/* Sync Carte */}
+          {/* Scryfall Sync - ENHANCED */}
           <div className="bg-gray-800 rounded-lg p-6">
             <div className="flex items-center mb-4">
-              <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center mr-3">
-                📄
+              <div className="w-8 h-8 bg-cyan-600 rounded flex items-center justify-center mr-3">
+                🌍
               </div>
               <div>
-                <h3 className="font-semibold">Sync Carte</h3>
-                <p className="text-sm text-gray-400">Da Scryfall</p>
+                <h3 className="font-semibold">Scryfall Sync</h3>
+                <p className="text-sm text-gray-400">Nomi IT + Immagini</p>
               </div>
             </div>
             
-            <div className="mb-4 text-sm">
-              <div>Totali: {databaseStats?.total_cards || 0}</div>
-              <div>Arena: {databaseStats?.arena_cards || 0}</div>
+            {scryfallStats && (
+              <div className="mb-4 text-sm space-y-1">
+                <div>Totali: {scryfallStats.total_cards}</div>
+                <div className="text-cyan-400">Con nomi IT: {scryfallStats.cards_with_italian_names} ({scryfallStats.italian_coverage_percentage?.toFixed(1)}%)</div>
+                <div className="text-green-400">Con immagini: {scryfallStats.cards_with_images}</div>
+                <div className="text-yellow-400">Sync recenti: {scryfallStats.cards_synced_last_week}</div>
+              </div>
+            )}
+            
+            <div className="mb-4">
+              <select 
+                value={syncMode} 
+                onChange={(e) => setSyncMode(e.target.value as any)}
+                className="w-full bg-gray-700 text-white p-2 rounded text-sm"
+                disabled={scryfallSyncLoading}
+              >
+                <option value="outdated">Obsolete (&gt;7 giorni)</option>
+                <option value="missing_italian">Senza nomi italiani</option>
+                <option value="missing_images">Senza immagini</option>
+                <option value="all">Tutte le carte</option>
+              </select>
             </div>
             
-            <button className="w-full bg-blue-600 hover:bg-blue-700 p-3 rounded font-semibold">
-              Sync Carte
+            <button
+              onClick={handleScryfallSync}
+              disabled={scryfallSyncLoading}
+              className="w-full bg-cyan-600 hover:bg-cyan-700 p-3 rounded font-semibold disabled:opacity-50"
+            >
+              {scryfallSyncLoading ? 'Syncing...' : 'Sync Scryfall'}
             </button>
           </div>
 
@@ -382,7 +502,7 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {/* New Sets - NUOVO */}
+          {/* New Sets */}
           <div className="bg-gray-800 rounded-lg p-6">
             <div className="flex items-center mb-4">
               <div className="w-8 h-8 bg-orange-600 rounded flex items-center justify-center mr-3">
@@ -407,7 +527,7 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {/* Placeholder per sesto pulsante */}
+          {/* Utils */}
           <div className="bg-gray-800 rounded-lg p-6">
             <div className="flex items-center mb-4">
               <div className="w-8 h-8 bg-gray-600 rounded flex items-center justify-center mr-3">
@@ -429,10 +549,60 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+        {/* Scryfall Sync Logs */}
+        {syncLogs.length > 0 && (
+          <div className="bg-gray-800 rounded-lg p-6 mt-8">
+            <h3 className="font-semibold mb-4">Scryfall Sync Log</h3>
+            <div className="bg-gray-900 rounded p-4 max-h-60 overflow-y-auto">
+              {syncLogs.map((log, index) => (
+                <div key={index} className="text-sm text-gray-300 mb-1">
+                  {log}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Results Sections */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
           
-          {/* Scryfall Results */}
+          {/* Scryfall Sync Results */}
+          {scryfallSyncResult && scryfallSyncResult.stats && (
+            <div className="bg-gray-800 rounded-lg p-6">
+              <h3 className="font-semibold mb-4">Risultato Scryfall Sync</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-cyan-400">
+                    {scryfallSyncResult.stats.cards_updated}
+                  </div>
+                  <div className="text-gray-400 text-sm">Carte aggiornate</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-400">
+                    {scryfallSyncResult.stats.cards_with_images}
+                  </div>
+                  <div className="text-gray-400 text-sm">Con immagini</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-blue-400">
+                    {scryfallSyncResult.stats.cards_with_italian_names}
+                  </div>
+                  <div className="text-gray-400 text-sm">Nomi italiani</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-red-400">
+                    {scryfallSyncResult.stats.errors}
+                  </div>
+                  <div className="text-gray-400 text-sm">Errori</div>
+                </div>
+              </div>
+              <div className="mt-4 text-sm text-gray-400">
+                Modalità: {getSyncModeLabel(syncMode)}
+              </div>
+            </div>
+          )}
+
+          {/* Other Results */}
           {scryfallResult && (
             <div className="bg-gray-800 rounded-lg p-6">
               <h3 className="font-semibold mb-4">Risultato Scryfall</h3>
