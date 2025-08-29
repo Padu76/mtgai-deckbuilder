@@ -26,7 +26,7 @@ interface DeckCard extends Card {
 }
 
 interface DeckData {
-  format: 'standard' | 'historic' | 'brawl'
+  format: 'standard' | 'brawl'
   bo_mode: 'bo1' | 'bo3'
   commander?: DeckCard
   main: DeckCard[]
@@ -65,7 +65,7 @@ export default function DeckPage() {
         const sampleDeck: DeckData = {
           id: deckId,
           name: 'AI Generated Combo Deck',
-          format: 'historic',
+          format: 'standard',
           bo_mode: 'bo1',
           colors: ['B', 'G'],
           main: [
