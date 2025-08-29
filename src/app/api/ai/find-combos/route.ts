@@ -195,7 +195,7 @@ async function searchDatabaseCombos(supabase: any, filters: ComboFilters): Promi
 async function generateAICombos(supabase: any, params: any): Promise<ComboSuggestion[]> {
   try {
     const colorsText = params.colors.length > 0 
-      ? `colori ${params.colors.join(', ')} (${params.colors.map(c => getColorName(c)).join(', ')})`
+      ? `colori ${params.colors.join(', ')} (${params.colors.map((c: string) => getColorName(c)).join(', ')})`
       : 'qualsiasi colore'
     
     const prompt = `Genera combo innovative di Magic The Gathering per questi parametri:
