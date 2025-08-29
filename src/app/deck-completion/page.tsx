@@ -1,6 +1,6 @@
 // src/app/deck-completion/page.tsx
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import CardPreview from '../../components/CardPreview'
 
@@ -47,7 +47,7 @@ interface CompletionResult {
   completion_strategy: string
 }
 
-export default function DeckCompletionPage() {
+function DeckCompletionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const deckId = searchParams.get('deck_id')
@@ -100,7 +100,6 @@ export default function DeckCompletionPage() {
       const data = await response.json()
       if (data.ok) {
         setAnalysis(data)
-        // Seleziona automaticamente tutti i suggerimenti - TYPE SAFE VERSION
         const suggestionIds: string[] = data.suggested_cards.map((card: DeckCard) => card.id)
         const allSuggestionIds = new Set<string>(suggestionIds)
         setSelectedSuggestions(allSuggestionIds)
@@ -520,5 +519,15 @@ export default function DeckCompletionPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function DeckCompletionPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center">
+      <div className="text-white text-xl">Caricamento...</div>
+    </div>}>
+      <DeckCompletionContent />
+    </Suspense>
   )
 }
