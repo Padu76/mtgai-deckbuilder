@@ -59,8 +59,8 @@ async function buildOptimalDeckList(
   const { data: cardPool } = await query.limit(1000)
   const cards = cardPool || []
 
-  const deckList = []
-  const usedCards = new Set()
+  const deckList: Array<{card_id: string, quantity: number, role: string}> = []
+  const usedCards = new Set<string>()
 
   // Add combo pieces (priority)
   comboCores.forEach(card => {
