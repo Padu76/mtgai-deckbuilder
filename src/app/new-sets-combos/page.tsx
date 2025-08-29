@@ -69,17 +69,23 @@ export default function NewSetsCombosPage() {
       }
       
       const data = await response.json()
+      const today = new Date()
       
-      // Filtra per expansion sets recenti e ordina per data release
+      // Filtra per expansion sets già rilasciati (non futuri) negli ultimi 3 anni
+      const threeYearsAgo = new Date()
+      threeYearsAgo.setFullYear(today.getFullYear() - 3)
+      
       const expansionSets = data.data
-        .filter((set: any) => 
-          set.set_type === 'expansion' && 
-          new Date(set.released_at) > new Date('2023-01-01') // Solo set molto recenti
-        )
+        .filter((set: any) => {
+          const releaseDate = new Date(set.released_at)
+          return set.set_type === 'expansion' && 
+                 releaseDate >= threeYearsAgo && 
+                 releaseDate <= today // Solo set già rilasciati, non futuri
+        })
         .sort((a: any, b: any) => 
           new Date(b.released_at).getTime() - new Date(a.released_at).getTime()
         )
-        .slice(0, 10) // Prime 10 espansioni più recenti
+        .slice(0, 10) // Prime 10 espansioni più recenti già rilasciate
       
       setRecentSets(expansionSets)
     } catch (error) {
