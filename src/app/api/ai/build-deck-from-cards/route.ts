@@ -14,6 +14,8 @@ interface Card {
   color_identity: string[]
   types: string[]
   oracle_text: string | null
+  power: string | null
+  toughness: string | null
   rarity: string | null
   set_code: string | null
   image_url: string | null
