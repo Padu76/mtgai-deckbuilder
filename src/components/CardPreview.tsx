@@ -14,7 +14,6 @@ interface Card {
     small?: string
     normal?: string
     large?: string
-    art_crop?: string
   } | null
   image_url?: string | null
   rarity?: string
@@ -50,7 +49,6 @@ export default function CardPreview({
     large: 'w-32 h-44'
   }
   
-  // Priorità per le immagini: image_uris.small > image_uris.normal > image_url > fallback Gatherer
   const imageUrl = card.image_uris?.small || 
                    card.image_uris?.normal || 
                    card.image_url ||
@@ -65,7 +63,6 @@ export default function CardPreview({
   
   const rarityColor = rarityColors[card.rarity as keyof typeof rarityColors] || 'border-gray-600'
   
-  // Converte simboli di mana in emoji/simboli
   const formatManaSymbols = (mana?: string) => {
     if (!mana) return ''
     
@@ -87,7 +84,7 @@ export default function CardPreview({
   }
 
   const handleQuantityChange = (newQuantity: number, e: React.MouseEvent) => {
-    e.stopPropagation() // Previeni il click sulla carta
+    e.stopPropagation()
     if (onQuantityChange) {
       onQuantityChange(Math.max(0, Math.min(maxQuantity, newQuantity)))
     }
@@ -100,7 +97,6 @@ export default function CardPreview({
       } ${className}`}
       onClick={handleClick}
     >
-      {/* Immagine carta */}
       <div className={`relative ${sizeClasses[size]}`}>
         {!imageError ? (
           <img 
@@ -113,7 +109,7 @@ export default function CardPreview({
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex flex-col justify-center items-center p-2 text-center">
             <div className="text-xs font-bold text-white mb-1 leading-tight">
-              {card.name}
+              {card.name.length > 12 ? card.name.slice(0, 10) + '...' : card.name}
             </div>
             <div className="text-xs text-gray-300 mb-1">
               {formatManaSymbols(card.mana_cost)}
@@ -124,7 +120,6 @@ export default function CardPreview({
           </div>
         )}
         
-        {/* Quantity counter */}
         {showQuantity && quantity > 0 && (
           <div className="absolute top-1 right-1 bg-orange-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold shadow-lg">
             {quantity}
@@ -132,7 +127,6 @@ export default function CardPreview({
         )}
       </div>
       
-      {/* Info rapide */}
       {size !== 'small' && (
         <div className="p-2 bg-gray-800">
           <div className="text-xs font-medium text-white truncate mb-1" title={card.name}>
@@ -147,12 +141,10 @@ export default function CardPreview({
             </div>
           </div>
           
-          {/* Tipo carta */}
           <div className="text-xs text-gray-400 truncate mb-2">
             {card.types?.join(' ') || ''}
           </div>
           
-          {/* Quantity controls */}
           {showQuantity && onQuantityChange && (
             <div className="flex items-center justify-center space-x-2">
               <button 
@@ -177,7 +169,6 @@ export default function CardPreview({
         </div>
       )}
       
-      {/* Hover tooltip per oracle text */}
       {card.oracle_text && size !== 'small' && (
         <div className="absolute inset-x-0 bottom-0 bg-black bg-opacity-95 text-white text-xs p-2 opacity-0 hover:opacity-100 transition-opacity duration-200 max-h-32 overflow-y-auto pointer-events-none">
           <div className="font-medium mb-1">{card.name}</div>
