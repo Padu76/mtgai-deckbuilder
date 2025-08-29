@@ -2,31 +2,6 @@
 import Link from 'next/link'
 
 export default function HomePage() {
-  const quickActions = [
-    {
-      title: 'AI Combo Builder',
-      description: 'L\'AI trova tutte le combo per i tuoi colori',
-      icon: '🧠',
-      color: 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500',
-      href: '/combo-builder',
-      featured: true
-    },
-    {
-      title: 'Builder Standard',
-      description: 'Crea deck Standard competitivi',
-      icon: '⚔️',
-      color: 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500',
-      href: '/build/standard'
-    },
-    {
-      title: 'Builder Brawl',
-      description: 'Mazzi singleton con comandante',
-      icon: '👑',
-      color: 'bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-500 hover:to-teal-500',
-      href: '/build/brawl'
-    }
-  ]
-
   const features = [
     {
       icon: '🔍',
@@ -48,6 +23,15 @@ export default function HomePage() {
       title: 'Curve Perfette',
       description: 'Analisi automatica di mana curve, sinergie e ratios per massima consistenza'
     }
+  ]
+
+  const comboTypes = [
+    { name: 'Combo Infinite', icon: '∞', description: 'Loop infiniti per vittorie immediate' },
+    { name: 'Poison/Toxic', icon: '☠️', description: 'Strategie veleno con proliferate' },
+    { name: 'Token Swarm', icon: '👥', description: 'Ondate di creature pedina' },
+    { name: 'Mill Engine', icon: '📚', description: 'Svuota biblioteca avversario' },
+    { name: 'Value Engine', icon: '📈', description: 'Vantaggio carte continuativo' },
+    { name: 'Lock/Stax', icon: '🔒', description: 'Controllo totale del gioco' }
   ]
 
   return (
@@ -72,8 +56,6 @@ export default function HomePage() {
                 <span>🧠</span>
                 <span>AI Combo Builder</span>
               </Link>
-              <Link href="/build/standard" className="text-gray-300 hover:text-white transition-colors">Standard</Link>
-              <Link href="/build/brawl" className="text-gray-300 hover:text-white transition-colors">Brawl</Link>
               <Link href="/admin" className="text-gray-300 hover:text-white transition-colors">Admin</Link>
             </nav>
           </div>
@@ -100,51 +82,29 @@ export default function HomePage() {
                 <span className="mr-3">🧠</span>
                 Trova Combo con AI
               </Link>
-              <Link 
-                href="/build/standard"
-                className="inline-flex items-center px-8 py-4 border-2 border-gray-600 text-gray-300 font-bold text-lg rounded-xl hover:border-gray-500 hover:text-white transition-all"
-              >
-                Builder Tradizionale
-              </Link>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Quick Actions */}
+      {/* Combo Types Preview */}
       <section className="py-16 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
-            <h3 className="text-3xl font-bold text-white mb-4">Inizia subito</h3>
-            <p className="text-gray-300 text-lg">Scegli il tuo approccio al deck building</p>
+            <h3 className="text-3xl font-bold text-white mb-4">Tipi di Combo Supportate</h3>
+            <p className="text-gray-300 text-lg">L'AI riconosce e ottimizza automaticamente queste strategie</p>
           </div>
           
-          <div className="grid md:grid-cols-3 gap-6">
-            {quickActions.map((action, idx) => (
-              <Link
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {comboTypes.map((combo, idx) => (
+              <div
                 key={idx}
-                href={action.href}
-                className={`
-                  group relative overflow-hidden rounded-2xl p-8 text-center transition-all duration-300 transform hover:scale-105 hover:shadow-2xl
-                  ${action.color}
-                  ${action.featured ? 'md:col-span-2 md:row-span-1' : ''}
-                `}
+                className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700 hover:border-purple-500/50 transition-all transform hover:scale-105"
               >
-                <div className="relative z-10">
-                  <div className="text-4xl mb-4">{action.icon}</div>
-                  <h4 className="text-2xl font-bold text-white mb-3">{action.title}</h4>
-                  <p className="text-gray-200 text-lg leading-relaxed">{action.description}</p>
-                  
-                  {action.featured && (
-                    <div className="mt-6 inline-flex items-center px-4 py-2 bg-white/20 rounded-lg text-white font-medium">
-                      <span className="mr-2">✨</span>
-                      Novità - AI Powered
-                    </div>
-                  )}
-                </div>
-                
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              </Link>
+                <div className="text-3xl mb-3">{combo.icon}</div>
+                <h4 className="text-xl font-bold text-white mb-2">{combo.name}</h4>
+                <p className="text-gray-400">{combo.description}</p>
+              </div>
             ))}
           </div>
         </div>
@@ -166,6 +126,44 @@ export default function HomePage() {
                 </div>
                 <h4 className="text-xl font-bold text-white mb-3">{feature.title}</h4>
                 <p className="text-gray-400 leading-relaxed">{feature.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="py-16 px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-12">
+            <h3 className="text-3xl font-bold text-white mb-4">Come Funziona</h3>
+            <p className="text-gray-300 text-lg">Tre semplici passi per il deck perfetto</p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              { 
+                step: '1', 
+                title: 'Scegli Colori', 
+                description: 'Seleziona fino a 3 colori e il formato di gioco (Standard, Historic, Brawl)'
+              },
+              { 
+                step: '2', 
+                title: 'AI Trova Combo', 
+                description: 'L\'intelligenza artificiale analizza migliaia di carte per trovare le sinergie migliori'
+              },
+              { 
+                step: '3', 
+                title: 'Deck Pronto', 
+                description: 'Ottieni un deck bilanciato e competitivo, pronto per l\'import in MTG Arena'
+              }
+            ].map((step, idx) => (
+              <div key={idx} className="text-center">
+                <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-xl font-bold text-white mb-4 mx-auto">
+                  {step.step}
+                </div>
+                <h4 className="text-xl font-bold text-white mb-3">{step.title}</h4>
+                <p className="text-gray-400 leading-relaxed">{step.description}</p>
               </div>
             ))}
           </div>
@@ -233,8 +231,6 @@ export default function HomePage() {
             </div>
             <div className="flex space-x-6 text-gray-400 text-sm">
               <Link href="/combo-builder" className="hover:text-white transition-colors">AI Builder</Link>
-              <Link href="/build/standard" className="hover:text-white transition-colors">Standard</Link>
-              <Link href="/build/brawl" className="hover:text-white transition-colors">Brawl</Link>
               <Link href="/admin" className="hover:text-white transition-colors">Admin</Link>
             </div>
           </div>
