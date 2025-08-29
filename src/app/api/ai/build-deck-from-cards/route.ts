@@ -135,25 +135,28 @@ export async function POST(request: NextRequest) {
 function analyzeSeedCards(seedCards: SeedCard[]) {
   const totalCards = seedCards.reduce((sum: number, seed: SeedCard) => sum + seed.quantity, 0)
   
-  // Analyze colors
   const colorDistribution: Record<string, number> = {}
   const typeDistribution: Record<string, number> = {}
   const manaCurve: Record<string, number> = {}
   const keywordFrequency: Record<string, number> = {}
 
-  seedCards.forEach((seed: SeedCard) => {
+  for (const seed of seedCards) {
     const card = seed.card
     const quantity = seed.quantity
 
     // Colors
-    (card.colors || []).forEach((color: string) => {
-      colorDistribution[color] = (colorDistribution[color] || 0) + quantity
-    })
+    if (Array.isArray(card.colors)) {
+      for (const color of card.colors) {
+        colorDistribution[color] = (colorDistribution[color] || 0) + quantity
+      }
+    }
 
-    // Types
-    (card.types || []).forEach((type: string) => {
-      typeDistribution[type] = (typeDistribution[type] || 0) + quantity
-    })
+    // Types  
+    if (Array.isArray(card.types)) {
+      for (const type of card.types) {
+        typeDistribution[type] = (typeDistribution[type] || 0) + quantity
+      }
+    }
 
     // Mana curve
     const cmc = Math.min(card.mana_value || 0, 7)
@@ -168,31 +171,32 @@ function analyzeSeedCards(seedCards: SeedCard[]) {
       'sacrifice', 'enters', 'dies', 'triggered', 'activated'
     ]
     
-    keywords.forEach((keyword: string) => {
+    for (const keyword of keywords) {
       if (text.includes(keyword)) {
         keywordFrequency[keyword] = (keywordFrequency[keyword] || 0) + quantity
       }
-    })
-  })
+    }
+  }
 
   // Determine dominant patterns
   const dominantColors = Object.entries(colorDistribution)
-    .sort(([,a], [,b]) => b - a)
+    .sort(([,a], [,b]) => (b as number) - (a as number))
     .slice(0, 3)
     .map(([color]) => color)
 
   const dominantTypes = Object.entries(typeDistribution)
-    .sort(([,a], [,b]) => b - a)
+    .sort(([,a], [,b]) => (b as number) - (a as number))
     .slice(0, 3)
     .map(([type]) => type)
 
   const dominantKeywords = Object.entries(keywordFrequency)
-    .sort(([,a], [,b]) => b - a)
+    .sort(([,a], [,b]) => (b as number) - (a as number))
     .slice(0, 5)
     .map(([keyword]) => keyword)
 
-  const avgManaCost = seedCards.reduce((sum: number, seed: SeedCard) => 
-    sum + (seed.card.mana_value || 0) * seed.quantity, 0) / totalCards
+  const avgManaCost = totalCards > 0 ? 
+    seedCards.reduce((sum: number, seed: SeedCard) => 
+      sum + (seed.card.mana_value || 0) * seed.quantity, 0) / totalCards : 0
 
   return {
     total_cards: totalCards,
@@ -235,7 +239,7 @@ async function buildDeckWithStrategy(
     reasoning: string
   }> = []
 
-  const usedCardIds = new Set(seedCards.map(seed => seed.card.id))
+  const usedCardIds = new Set(seedCards.map((seed: SeedCard) => seed.card.id))
   const dominantColors = analysis.dominant_colors
   const cardsNeeded = targetCards - analysis.total_cards
 
@@ -243,13 +247,13 @@ async function buildDeckWithStrategy(
   const strategyCategories = getStrategySupportCategories(strategy, analysis)
 
   // Filter card pool by colors and strategy
-  const compatibleCards = cardPool.filter(card => {
+  const compatibleCards = cardPool.filter((card: Card) => {
     if (usedCardIds.has(card.id)) return false
     
     // Color compatibility
     const cardColors = card.color_identity || []
     if (cardColors.length > 0) {
-      const hasCompatibleColors = cardColors.every(color => dominantColors.includes(color))
+      const hasCompatibleColors = cardColors.every((color: string) => dominantColors.includes(color))
       if (!hasCompatibleColors) return false
     }
 
@@ -262,14 +266,14 @@ async function buildDeckWithStrategy(
     if (cardsAdded >= cardsNeeded) break
 
     const categoryCards = compatibleCards
-      .filter(card => {
+      .filter((card: Card) => {
         try {
           return category.filter(card)
         } catch (e) {
           return false
         }
       })
-      .sort((a, b) => {
+      .sort((a: Card, b: Card) => {
         // Sort by strategy preferences
         if (strategy.mana_curve_preference === 'low') {
           return (a.mana_value || 0) - (b.mana_value || 0)
@@ -280,8 +284,8 @@ async function buildDeckWithStrategy(
       })
       .slice(0, category.max_cards)
 
-    categoryCards.forEach(card => {
-      if (cardsAdded >= cardsNeeded) return
+    for (const card of categoryCards) {
+      if (cardsAdded >= cardsNeeded) break
       
       const quantity = format === 'brawl' ? 1 : Math.min(4, category.preferred_quantity || 2)
       suggestions.push({
@@ -293,7 +297,7 @@ async function buildDeckWithStrategy(
       
       usedCardIds.add(card.id)
       cardsAdded += quantity
-    })
+    }
   }
 
   // Add mana base
@@ -301,9 +305,9 @@ async function buildDeckWithStrategy(
 
   // Calculate final curve
   const allCards = [
-    ...seedCards.map(seed => ({ card: seed.card, quantity: seed.quantity })),
+    ...seedCards.map((seed: SeedCard) => ({ card: seed.card, quantity: seed.quantity })),
     ...suggestions,
-    ...manaBaseSuggestion.map(card => ({ card, quantity: format === 'brawl' ? 1 : 4 }))
+    ...manaBaseSuggestion.map((card: Card) => ({ card, quantity: format === 'brawl' ? 1 : 4 }))
   ]
 
   const finalCurve = allCards.reduce((acc: Record<string, number>, item) => {
@@ -315,7 +319,7 @@ async function buildDeckWithStrategy(
 
   return {
     cards: suggestions,
-    total_cards: suggestions.reduce((sum, s) => sum + s.quantity, 0),
+    total_cards: suggestions.reduce((sum: number, s) => sum + s.quantity, 0),
     strategy_analysis: generateStrategyAnalysis(strategy, analysis),
     mana_base_suggestion: manaBaseSuggestion,
     curve_analysis: finalCurve
@@ -335,35 +339,11 @@ function getStrategySupportCategories(strategy: BuildStrategy, analysis: any) {
                text.includes('damage') || text.includes('counter')
       },
       reasoning: 'Interazione necessaria per gestire minacce avversarie'
-    },
-    {
-      name: 'card_advantage',
-      max_cards: 6,
-      preferred_quantity: 2,
-      filter: (card: Card) => {
-        const text = (card.oracle_text || '').toLowerCase()
-        return text.includes('draw') && !text.includes('drawback')
-      },
-      reasoning: 'Card advantage per sostenere la strategia lungo termine'
     }
   ]
 
   // Add strategy-specific categories
   switch (strategy.strategy_type) {
-    case 'combo':
-      baseCategories.push({
-        name: 'combo_enablers',
-        max_cards: 8,
-        preferred_quantity: 3,
-        filter: (card: Card) => {
-          const text = (card.oracle_text || '').toLowerCase()
-          return text.includes('search') || text.includes('tutor') || 
-                 text.includes('create') || text.includes('copy')
-        },
-        reasoning: 'Carte che facilitano l\'assemblaggio delle combo'
-      })
-      break
-
     case 'aggro':
       baseCategories.push({
         name: 'aggressive_creatures',
@@ -387,46 +367,9 @@ function getStrategySupportCategories(strategy: BuildStrategy, analysis: any) {
         filter: (card: Card) => {
           const text = (card.oracle_text || '').toLowerCase()
           return (text.includes('add') && text.includes('mana')) || 
-                 text.includes('search') && text.includes('land')
+                 (text.includes('search') && text.includes('land'))
         },
         reasoning: 'Accelerazione mana per giocate potenti'
-      }, {
-        name: 'big_threats',
-        max_cards: 6,
-        preferred_quantity: 2,
-        filter: (card: Card) => {
-          return (card.types || []).includes('Creature') && 
-                 (card.mana_value || 0) >= 5
-        },
-        reasoning: 'Minacce grosse come payoff per il ramp'
-      })
-      break
-
-    case 'tribal':
-      const dominantType = analysis.dominant_types[0] === 'Land' ? 
-                          analysis.dominant_types[1] : analysis.dominant_types[0]
-      baseCategories.push({
-        name: 'tribal_synergy',
-        max_cards: 12,
-        preferred_quantity: 3,
-        filter: (card: Card) => {
-          return (card.types || []).includes(dominantType) ||
-                 (card.oracle_text || '').toLowerCase().includes(dominantType.toLowerCase())
-        },
-        reasoning: `Sinergie tribali per ${dominantType}`
-      })
-      break
-
-    case 'artifacts':
-      baseCategories.push({
-        name: 'artifact_synergy',
-        max_cards: 10,
-        preferred_quantity: 2,
-        filter: (card: Card) => {
-          return (card.types || []).includes('Artifact') ||
-                 (card.oracle_text || '').toLowerCase().includes('artifact')
-        },
-        reasoning: 'Sinergie artefatti per engine di valore'
       })
       break
   }
@@ -435,7 +378,6 @@ function getStrategySupportCategories(strategy: BuildStrategy, analysis: any) {
 }
 
 function generateManaBase(colors: string[], format: string, targetCards: number): Card[] {
-  // Simplified mana base generation
   const basicLands: Record<string, Card> = {
     'W': {
       id: 'plains', name: 'Plains', mana_cost: '', mana_value: 0,
@@ -464,7 +406,7 @@ function generateManaBase(colors: string[], format: string, targetCards: number)
     }
   }
 
-  return colors.map(color => basicLands[color]).filter(Boolean)
+  return colors.map((color: string) => basicLands[color]).filter(Boolean)
 }
 
 function generateStrategyAnalysis(strategy: BuildStrategy, analysis: any): string {
