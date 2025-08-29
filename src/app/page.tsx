@@ -72,6 +72,13 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      {/* Admin Menu */}
+      <div className="absolute top-4 right-4 z-50">
+        <Link href="/admin" className="px-3 py-1 bg-slate-800/50 hover:bg-slate-800/70 text-slate-400 hover:text-white text-sm rounded-lg transition-colors border border-slate-700">
+          Admin
+        </Link>
+      </div>
+
       {/* Hero Section */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-purple-600/20 to-pink-600/20" />
