@@ -26,9 +26,6 @@ interface ScryfallCard {
     art_crop?: string
     border_crop?: string
   }
-  prices?: {
-    // Rimosso - non rilevante per MTG Arena (sistema wildcards)
-  }
   legalities?: { [format: string]: string }
   games?: string[]
   arena_id?: number
@@ -331,7 +328,7 @@ function mergeCardLocalizations(
 /**
  * Check if a card needs Scryfall sync (no sync in last 7 days)
  */
-export function needsScryfall Sync(lastSyncDate?: string | null): boolean {
+export function needsScryfallSync(lastSyncDate?: string | null): boolean {
   if (!lastSyncDate) return true
   
   const lastSync = new Date(lastSyncDate)
