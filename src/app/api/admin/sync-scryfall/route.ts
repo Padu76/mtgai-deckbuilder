@@ -1,4 +1,4 @@
-// src/app/api/admin/sync-scryfall-cards/route.ts
+// src/app/api/admin/sync-scryfall/route.ts
 // Endpoint per sincronizzazione massiva carte con Scryfall (immagini + nomi italiani)
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -8,7 +8,7 @@ import {
   batchLocalizeCards, 
   validateCardData,
   needsScryfallSync 
-} from '@/lib/scryfall-enhanced'
+} from '../../../../lib/scryfall-enhanced'
 
 const config = {
   supabase: {
