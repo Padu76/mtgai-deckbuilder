@@ -1,4 +1,3 @@
-// src/app/page.tsx - Homepage con New Sets Analysis sostituita ad Analisi Meta
 'use client'
 
 import { useState } from 'react'
@@ -72,14 +71,12 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {/* Admin Menu */}
       <div className="absolute top-4 right-4 z-50">
         <Link href="/admin" className="px-3 py-1 bg-slate-800/50 hover:bg-slate-800/70 text-slate-400 hover:text-white text-sm rounded-lg transition-colors border border-slate-700">
           Admin
         </Link>
       </div>
 
-      {/* Hero Section */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-purple-600/20 to-pink-600/20" />
         <div className="relative max-w-7xl mx-auto px-4 py-20">
@@ -106,7 +103,6 @@ export default function HomePage() {
               </span>
             </div>
 
-            {/* Quick Actions con New Sets */}
             <div className="bg-slate-800/30 backdrop-blur-sm rounded-xl p-4 max-w-md mx-auto">
               <div className="text-sm text-slate-400 mb-3">Quick Start:</div>
               <div className="flex justify-center gap-2">
@@ -125,7 +121,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Main Features Grid */}
       <div className="max-w-7xl mx-auto px-4 py-16">
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold text-white mb-4">
@@ -156,7 +151,6 @@ export default function HomePage() {
                 </div>
               )}
 
-              {/* Badge "New" per New Sets */}
               {feature.id === 'new-sets-analysis' && (
                 <div className="absolute top-4 right-4 z-10">
                   <span className="px-2 py-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded-full text-xs animate-pulse">
@@ -165,7 +159,6 @@ export default function HomePage() {
                 </div>
               )}
               
-              {/* Header */}
               <div className="flex items-center gap-4 mb-4">
                 <div className={`p-3 rounded-xl bg-gradient-to-r ${feature.gradient} text-white text-2xl`}>
                   {feature.icon}
@@ -180,7 +173,6 @@ export default function HomePage() {
                 </div>
               </div>
               
-              {/* Content */}
               <div className="space-y-4">
                 <p className="text-slate-300 leading-relaxed text-sm">
                   {feature.description}
@@ -210,7 +202,6 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {/* Hover Effect */}
               {hoveredFeature === feature.id && (
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none rounded-xl" />
               )}
@@ -219,7 +210,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Feature Spotlight con New Sets */}
       <div className="bg-slate-800/30 backdrop-blur-sm border-y border-slate-700">
         <div className="max-w-7xl mx-auto px-4 py-16">
           <div className="text-center mb-12">
@@ -261,7 +251,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* New Sets Highlight Section */}
       <div className="bg-gradient-to-r from-red-900/30 to-orange-900/30 backdrop-blur-sm border-y border-red-800/50">
         <div className="max-w-7xl mx-auto px-4 py-12">
           <div className="text-center">
@@ -294,7 +283,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Call to Action */}
       <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto px-4 py-16 text-center">
           <h2 className="text-4xl font-bold text-white mb-4">
@@ -327,7 +315,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Footer */}
       <footer className="bg-slate-900 border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row justify-between items-center">
@@ -345,7 +332,7 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-      </div>
+      </footer>
     </div>
   )
 }
