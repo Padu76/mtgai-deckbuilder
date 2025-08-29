@@ -114,8 +114,8 @@ async function buildOptimalDeckList(
   for (const category of supportCategories) {
     const categoryCards = cards
       .filter(category.filter)
-      .filter(c => !usedCards.has(c.id))
-      .sort((a, b) => {
+      .filter((c: Card) => !usedCards.has(c.id))
+      .sort((a: Card, b: Card) => {
         // Prefer cards that match combo colors exactly
         const aColorMatch = a.color_identity.every(color => colors.includes(color))
         const bColorMatch = b.color_identity.every(color => colors.includes(color))
