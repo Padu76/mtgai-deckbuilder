@@ -396,6 +396,9 @@ function extractItalianNameFromHtml(html: string, englishName: string): string |
 function extractItalianFromTranslationsPage(html: string, englishName: string): string | undefined {
   try {
     // Cerca nella pagina traduzioni specifiche per la carta
+    const escapedName = englishName.replace(/[.*+?^${}()|[\]\\]/g, '\\function extractItalianFromTranslationsPage(html: string, englishName: string): string | undefined {
+  try {
+    // Cerca nella pagina traduzioni specifiche per la carta
     const cardSectionRegex = new RegExp(
       `${englishName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^<]*<[^>]*>[^<]*([^<]+(?:italiano|italian)[^<]*<[^>]*>([^<]+)|([^<]+))`,
       'i'
@@ -413,6 +416,33 @@ function extractItalianFromTranslationsPage(html: string, englishName: string): 
     const escapedName = englishName.replace(/[.*+?^${}()|[\]\\]/g, '\\    // Fallback: cerca pattern tabella traduzioni
     const tablePattern = /<table[^>]*>.*?<tr[^>]*>.*?${englishName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}.*?<td[^>]*>([^<]+)/is
     const tableMatch = html.match(tablePattern)')
+    const tablePattern = new RegExp(`<table[^>]*>.*?<tr[^>]*>.*?${escapedName}.*?<td[^>]*>([^<]+)`, 'is')
+    const tableMatch = html.match(tablePattern)
+    
+    if (tableMatch && tableMatch[1] && tableMatch[1].trim() !== englishName) {
+      return tableMatch[1].trim()
+    }
+    
+    return undefined
+    
+  } catch (error) {
+    return undefined
+  }
+}')
+    const cardSectionRegex = new RegExp(
+      `${escapedName}[^<]*<[^>]*>[^<]*([^<]+(?:italiano|italian)[^<]*<[^>]*>([^<]+)|([^<]+))`,
+      'i'
+    )
+    
+    const match = html.match(cardSectionRegex)
+    if (match) {
+      const italianName = match[2] || match[3]
+      if (italianName && italianName.trim() !== englishName) {
+        return italianName.trim()
+      }
+    }
+    
+    // Fallback: cerca pattern tabella traduzioni
     const tablePattern = new RegExp(`<table[^>]*>.*?<tr[^>]*>.*?${escapedName}.*?<td[^>]*>([^<]+)`, 'is')
     const tableMatch = html.match(tablePattern)
     
