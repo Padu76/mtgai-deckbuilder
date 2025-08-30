@@ -2,7 +2,7 @@
 // API endpoint per scoprire combo dalle carte seed dell'utente
 
 import { NextRequest, NextResponse } from 'next/server'
-import { ComboDiscoveryEngine } from '@/lib/combo-discovery'
+import { ComboDiscoveryEngine } from '../../../../lib/combo-discovery'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
