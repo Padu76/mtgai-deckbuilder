@@ -169,7 +169,7 @@ async function fetchCardsRealmHistoricCombos(
     for (const colorCombo of targetColors) {
       if (allCombos.length >= maxCombos) break
       
-      const colors = typeof colorCombo === 'string' ? colorCombo : colorCombo.colors || colorCombo
+      const colors = typeof colorCombo === 'string' ? colorCombo : String(colorCombo)
       
       log.push(`Fetching ${colors} combos for Historic Brawl...`)
       
