@@ -66,6 +66,29 @@ export default function HomePage() {
       link: '/new-sets-combos',
       gradient: 'from-red-500 to-orange-400',
       available: true
+    },
+    // Nuove modalità del sistema discovery
+    {
+      id: 'advanced-combo-discovery',
+      icon: '🧬',
+      title: 'Discovery Avanzato',
+      subtitle: 'AI Pattern Recognition',
+      description: 'Sistema avanzato che analizza pattern nascosti nei testi Oracle per scoprire combo mai documentate.',
+      link: '/trova-combo',
+      gradient: 'from-indigo-500 to-blue-400',
+      available: true,
+      isNew: true
+    },
+    {
+      id: 'seed-combo-analysis',
+      icon: '🔬',
+      title: 'Analisi Seed',
+      subtitle: 'Reverse Engineering',
+      description: 'Inserisci le tue carte e l\'AI fa reverse engineering per trovare tutte le combo possibili.',
+      link: '/combo-da-carte',
+      gradient: 'from-teal-500 to-cyan-400',
+      available: true,
+      isNew: true
     }
   ]
 
@@ -112,8 +135,8 @@ export default function HomePage() {
                 <Link href="/find-combos-from-cards" className="px-3 py-2 bg-purple-500/20 text-purple-400 rounded-lg text-xs hover:bg-purple-500/30 transition-colors">
                   🃏 Dalle mie carte
                 </Link>
-                <Link href="/new-sets-combos" className="px-3 py-2 bg-red-500/20 text-red-400 rounded-lg text-xs hover:bg-red-500/30 transition-colors">
-                  🔥 Nuove combo
+                <Link href="/trova-combo" className="px-3 py-2 bg-indigo-500/20 text-indigo-400 rounded-lg text-xs hover:bg-indigo-500/30 transition-colors">
+                  🧬 Discovery AI
                 </Link>
               </div>
             </div>
@@ -131,7 +154,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {features.map((feature) => (
             <div 
               key={feature.id}
@@ -155,6 +178,14 @@ export default function HomePage() {
                 <div className="absolute top-4 right-4 z-10">
                   <span className="px-2 py-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded-full text-xs animate-pulse">
                     New!
+                  </span>
+                </div>
+              )}
+
+              {feature.isNew && (
+                <div className="absolute top-4 right-4 z-10">
+                  <span className="px-2 py-1 bg-green-500/20 text-green-400 border border-green-500/30 rounded-full text-xs animate-pulse">
+                    Advanced AI
                   </span>
                 </div>
               )}
@@ -187,7 +218,8 @@ export default function HomePage() {
                         flex items-center justify-center gap-2
                       `}>
                         <span>🪄</span>
-                        {feature.id === 'new-sets-analysis' ? 'Scopri nuove combo' : 'Inizia ora'}
+                        {feature.isNew ? 'Prova Advanced AI' : 
+                         feature.id === 'new-sets-analysis' ? 'Scopri nuove combo' : 'Inizia ora'}
                       </button>
                     </Link>
                   ) : (
@@ -207,6 +239,48 @@ export default function HomePage() {
               )}
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Sezione speciale per il nuovo sistema AI */}
+      <div className="bg-gradient-to-r from-indigo-900/30 to-teal-900/30 backdrop-blur-sm border-y border-indigo-800/50">
+        <div className="max-w-7xl mx-auto px-4 py-12">
+          <div className="text-center mb-8">
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <span className="text-2xl">🧬</span>
+              <h2 className="text-2xl font-bold text-white">Advanced Discovery System</h2>
+              <span className="text-2xl">🔬</span>
+            </div>
+            <p className="text-slate-300 mb-6 max-w-3xl mx-auto">
+              Il nostro nuovo motore AI analizza semanticamente i testi Oracle di tutte le carte Arena per trovare 
+              combo mai documentate. Non usa database esistenti ma fa pattern recognition avanzato sui testi delle carte.
+            </p>
+            <div className="flex justify-center gap-4 text-sm mb-6">
+              <span className="px-3 py-1 bg-indigo-500/20 text-indigo-400 rounded-full border border-indigo-500/30">
+                Pattern Recognition
+              </span>
+              <span className="px-3 py-1 bg-teal-500/20 text-teal-400 rounded-full border border-teal-500/30">
+                Oracle Text Analysis
+              </span>
+              <span className="px-3 py-1 bg-cyan-500/20 text-cyan-400 rounded-full border border-cyan-500/30">
+                Undocumented Combos
+              </span>
+            </div>
+            <div className="flex justify-center gap-4">
+              <Link href="/trova-combo">
+                <button className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-medium px-6 py-3 rounded-lg hover:from-indigo-700 hover:to-blue-700 transition-all flex items-center gap-2">
+                  <span>🔍</span>
+                  Scoperta per Archetipi
+                </button>
+              </Link>
+              <Link href="/combo-da-carte">
+                <button className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white font-medium px-6 py-3 rounded-lg hover:from-teal-700 hover:to-cyan-700 transition-all flex items-center gap-2">
+                  <span>🔬</span>
+                  Analisi dalle tue Carte
+                </button>
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -299,17 +373,17 @@ export default function HomePage() {
                 Scopri Combo Ora
               </button>
             </Link>
-            <Link href="/new-sets-combos">
-              <button className="border border-red-400 text-red-400 font-medium px-8 py-3 rounded-lg hover:bg-red-400/10 transition-all flex items-center justify-center gap-2">
-                <span>🔥</span>
-                Nuove Espansioni
+            <Link href="/trova-combo">
+              <button className="border border-indigo-400 text-indigo-400 font-medium px-8 py-3 rounded-lg hover:bg-indigo-400/10 transition-all flex items-center justify-center gap-2">
+                <span>🧬</span>
+                Advanced Discovery
               </button>
             </Link>
           </div>
 
           <div className="mt-6">
-            <Link href="/build-from-cards" className="text-slate-400 hover:text-white transition-colors text-sm">
-              O costruisci un deck completo dalle tue carte preferite →
+            <Link href="/combo-da-carte" className="text-slate-400 hover:text-white transition-colors text-sm">
+              O analizza le tue carte con l'Advanced AI →
             </Link>
           </div>
         </div>
