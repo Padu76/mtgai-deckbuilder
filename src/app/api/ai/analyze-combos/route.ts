@@ -218,7 +218,7 @@ async function getExistingCombos(supabase: any, colors: string[], format: string
     }
 
     // Post-filter in JavaScript per color identity precisa (fallback per query PostgreSQL complesse)
-    const filteredCombos = combos.filter(combo => {
+    const filteredCombos = combos.filter((combo: any) => {
       const comboColors = combo.color_identity || []
       
       // Incolori sono sempre OK
