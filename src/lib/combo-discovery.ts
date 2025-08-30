@@ -16,12 +16,12 @@ interface Card {
   colors: string[]
   color_identity: string[]
   types: string[]
-  subtypes: string[]
+  subtypes?: string[]
   oracle_text: string
   legal_standard: boolean
   legal_historic: boolean
   legal_brawl: boolean
-  tags: string[]
+  tags?: string[]
   produces_colors?: string[]
 }
 
@@ -61,15 +61,18 @@ export class ComboDiscoveryEngine {
     this.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } })
   }
 
-  async initialize(format: 'standard' | 'historic' | 'brawl' = 'standard') {
-    console.log('Inizializing Combo Discovery Engine...')
+  async initialize(format: 'standard' | 'historic' | 'brawl' = 'standard'): Promise<void> {
+    console.log('Initializing Combo Discovery Engine...')
     
     // Carica carte legali per il formato
+    const legalityColumn = format === 'standard' ? 'legal_standard' : 
+                          format === 'historic' ? 'legal_historic' : 'legal_brawl'
+    
     const { data: cards, error } = await this.supabase
       .from('cards')
       .select('*')
       .eq('in_arena', true)
-      .eq(format === 'standard' ? 'legal_standard' : format === 'historic' ? 'legal_historic' : 'legal_brawl', true)
+      .eq(legalityColumn, true)
     
     if (error) {
       throw new Error(`Errore caricamento carte: ${error.message}`)
@@ -83,7 +86,7 @@ export class ComboDiscoveryEngine {
     console.log(`Identificati ${this.triggers.length} trigger e ${this.enablers.length} enabler`)
   }
 
-  private async analyzeCardPatterns() {
+  private async analyzeCardPatterns(): Promise<void> {
     this.triggers = []
     this.enablers = []
 
@@ -101,7 +104,7 @@ export class ComboDiscoveryEngine {
     const triggers: TriggerPattern[] = []
 
     // Pattern ETB (Enters the Battlefield)
-    if (text.includes('enters the battlefield') || text.includes('enters') && text.includes('battlefield')) {
+    if (text.includes('enters the battlefield') || (text.includes('enters') && text.includes('battlefield'))) {
       triggers.push({
         card_id: card.id,
         trigger_type: 'etb',
@@ -547,24 +550,25 @@ export class ComboDiscoveryEngine {
   private cardMatchesArchetype(card: Card, archetype: string): boolean {
     const text = card.oracle_text.toLowerCase()
     const name = card.name.toLowerCase()
+    const tags = card.tags || []
 
     switch (archetype.toLowerCase()) {
       case 'lifegain':
-        return text.includes('gain life') || text.includes('lifegain') || card.tags.includes('lifegain')
+        return text.includes('gain life') || text.includes('lifegain') || tags.includes('lifegain')
       case 'artifacts':
-        return card.types.includes('Artifact') || text.includes('artifact') || card.tags.includes('artifacts')
+        return card.types.includes('Artifact') || text.includes('artifact') || tags.includes('artifacts')
       case 'spells':
         return text.includes('instant') || text.includes('sorcery') || text.includes('noncreature spell')
       case 'tokens':
         return text.includes('create') && text.includes('token')
       case 'sacrifice':
-        return text.includes('sacrifice') || card.tags.includes('sacrifice')
+        return text.includes('sacrifice') || tags.includes('sacrifice')
       case 'graveyard':
-        return text.includes('graveyard') || text.includes('exile') && text.includes('graveyard')
+        return text.includes('graveyard') || (text.includes('exile') && text.includes('graveyard'))
       case 'counters':
-        return text.includes('+1/+1') || text.includes('counter') && !text.includes('counter target')
+        return text.includes('+1/+1') || (text.includes('counter') && !text.includes('counter target'))
       default:
-        return card.tags.includes(archetype.toLowerCase())
+        return tags.includes(archetype.toLowerCase())
     }
   }
 }
