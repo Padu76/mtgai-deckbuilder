@@ -1,4 +1,4 @@
-// src/app/admin/page.tsx - Admin dashboard con Gatherer Italian Import
+// src/app/admin/page.tsx - Admin dashboard con MTG Arena Zone Italian Import
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -91,6 +91,22 @@ interface GathererItalianImportResult {
   errors?: string[]
 }
 
+interface ArenaZoneItalianImportResult {
+  success: boolean
+  message: string
+  stats?: {
+    cards_processed: number
+    cards_with_existing_italian: number
+    new_italian_translations: number
+    arena_zone_queries: number
+    errors: number
+    coverage_improvement: string
+    sets_processed: string[]
+  }
+  log?: string[]
+  errors?: string[]
+}
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -130,11 +146,17 @@ export default function AdminDashboard() {
   const [edhrecColorFilter, setEdhrecColorFilter] = useState<string[]>([])
   const [includeUnpopular, setIncludeUnpopular] = useState(false)
 
-  // Stati per Gatherer Italian Import - NUOVO
+  // Stati per Gatherer Italian Import
   const [gathererItalianResult, setGathererItalianResult] = useState<GathererItalianImportResult | null>(null)
   const [gathererItalianLoading, setGathererItalianLoading] = useState(false)
   const [gathererMaxCards, setGathererMaxCards] = useState(200)
   const [onlyArenaCards, setOnlyArenaCards] = useState(true)
+
+  // Stati per Arena Zone Italian Import - NUOVO
+  const [arenaZoneItalianResult, setArenaZoneItalianResult] = useState<ArenaZoneItalianImportResult | null>(null)
+  const [arenaZoneItalianLoading, setArenaZoneItalianLoading] = useState(false)
+  const [arenaZoneMaxCards, setArenaZoneMaxCards] = useState(300)
+  const [usePrioritySets, setUsePrioritySets] = useState(true)
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -425,7 +447,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // NUOVO: Gatherer Italian Import Handler
   const handleGathererItalianImport = async () => {
     setGathererItalianLoading(true)
     setGathererItalianResult(null)
@@ -447,7 +468,7 @@ export default function AdminDashboard() {
       if (data.success && data.stats) {
         setGathererItalianResult(data)
         loadDatabaseStats()
-        loadScryfallStats() // Refresh per vedere il miglioramento coverage
+        loadScryfallStats()
       } else {
         alert(`Gatherer Italian import fallito: ${data.message || 'Errore sconosciuto'}`)
       }
@@ -455,6 +476,39 @@ export default function AdminDashboard() {
       alert(`Errore Gatherer Italian: ${error}`)
     } finally {
       setGathererItalianLoading(false)
+    }
+  }
+
+  // NUOVO: Arena Zone Italian Import Handler
+  const handleArenaZoneItalianImport = async () => {
+    setArenaZoneItalianLoading(true)
+    setArenaZoneItalianResult(null)
+    
+    try {
+      const response = await fetch('/api/admin/import-arena-zone-italian', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          adminKey,
+          maxCards: arenaZoneMaxCards,
+          skipExisting: true,
+          prioritySets: usePrioritySets
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (data.success && data.stats) {
+        setArenaZoneItalianResult(data)
+        loadDatabaseStats()
+        loadScryfallStats()
+      } else {
+        alert(`Arena Zone Italian import fallito: ${data.message || 'Errore sconosciuto'}`)
+      }
+    } catch (error) {
+      alert(`Errore Arena Zone Italian: ${error}`)
+    } finally {
+      setArenaZoneItalianLoading(false)
     }
   }
 
@@ -605,7 +659,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* NUOVO: Gatherer Italian Results */}
         {gathererItalianResult && gathererItalianResult.success && (
           <div className="bg-emerald-900/30 border border-emerald-500 rounded-lg p-4 mb-6">
             <div className="flex justify-between items-center mb-2">
@@ -618,6 +671,29 @@ export default function AdminDashboard() {
               <div><span className="text-emerald-200">Query Gatherer:</span> <strong>{gathererItalianResult.stats?.gatherer_queries}</strong></div>
               <div><span className="text-emerald-200">Miglioramento:</span> <strong>{gathererItalianResult.stats?.coverage_improvement}</strong></div>
             </div>
+          </div>
+        )}
+
+        {/* NUOVO: Arena Zone Italian Results */}
+        {arenaZoneItalianResult && arenaZoneItalianResult.success && (
+          <div className="bg-violet-900/30 border border-violet-500 rounded-lg p-4 mb-6">
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="text-violet-400 font-semibold">✓ Arena Zone Italian Import Completato</h4>
+              <span className="text-violet-300 text-sm">Arena Client Data</span>
+            </div>
+            <div className="grid grid-cols-4 gap-4">
+              <div><span className="text-violet-200">Processate:</span> <strong>{arenaZoneItalianResult.stats?.cards_processed}</strong></div>
+              <div><span className="text-violet-200">Trovate IT:</span> <strong>{arenaZoneItalianResult.stats?.new_italian_translations}</strong></div>
+              <div><span className="text-violet-200">Query Arena Zone:</span> <strong>{arenaZoneItalianResult.stats?.arena_zone_queries}</strong></div>
+              <div><span className="text-violet-200">Miglioramento:</span> <strong>{arenaZoneItalianResult.stats?.coverage_improvement}</strong></div>
+            </div>
+            {arenaZoneItalianResult.stats?.sets_processed && arenaZoneItalianResult.stats.sets_processed.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-violet-700">
+                <span className="text-violet-300 text-sm">Set processati: </span>
+                <span className="text-violet-200 text-sm">{arenaZoneItalianResult.stats.sets_processed.slice(0, 8).join(', ')}</span>
+                {arenaZoneItalianResult.stats.sets_processed.length > 8 && <span className="text-violet-200 text-sm">...</span>}
+              </div>
+            )}
           </div>
         )}
 
@@ -750,8 +826,8 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Enhanced Action Buttons - Updated with Gatherer */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+        {/* Enhanced Action Buttons - Updated with Arena Zone */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-9 gap-4">
           
           {/* Scryfall Sync */}
           <div className="bg-gray-800 rounded-lg p-4">
@@ -791,10 +867,10 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {/* NUOVO: Gatherer Italian */}
+          {/* Gatherer Italian */}
           <div className="bg-gray-800 rounded-lg p-4">
             <div className="flex items-center mb-3">
-              <div className="w-6 h-6 bg-emerald-600 rounded flex items-center justify-center mr-2 text-xs">🇮🇹</div>
+              <div className="w-6 h-6 bg-emerald-600 rounded flex items-center justify-center mr-2 text-xs">🏛️</div>
               <div>
                 <h3 className="font-semibold text-sm">Gatherer IT</h3>
                 <p className="text-xs text-gray-400">Wizards official</p>
@@ -828,6 +904,46 @@ export default function AdminDashboard() {
               className="w-full bg-emerald-600 hover:bg-emerald-700 p-2 rounded text-sm font-semibold disabled:opacity-50"
             >
               {gathererItalianLoading ? 'Importing...' : 'Import IT'}
+            </button>
+          </div>
+
+          {/* NUOVO: Arena Zone Italian */}
+          <div className="bg-gray-800 rounded-lg p-4">
+            <div className="flex items-center mb-3">
+              <div className="w-6 h-6 bg-violet-600 rounded flex items-center justify-center mr-2 text-xs">⚡</div>
+              <div>
+                <h3 className="font-semibold text-sm">Arena Zone IT</h3>
+                <p className="text-xs text-gray-400">Client translations</p>
+              </div>
+            </div>
+            <div className="mb-2 space-y-1">
+              <input
+                type="number"
+                value={arenaZoneMaxCards}
+                onChange={(e) => setArenaZoneMaxCards(parseInt(e.target.value) || 300)}
+                min="100"
+                max="1000"
+                step="50"
+                className="w-full bg-gray-700 text-white p-1 rounded text-xs"
+                disabled={arenaZoneItalianLoading}
+              />
+              <label className="flex items-center text-xs">
+                <input
+                  type="checkbox"
+                  checked={usePrioritySets}
+                  onChange={(e) => setUsePrioritySets(e.target.checked)}
+                  className="mr-1"
+                  disabled={arenaZoneItalianLoading}
+                />
+                Set prioritari Arena
+              </label>
+            </div>
+            <button
+              onClick={handleArenaZoneItalianImport}
+              disabled={arenaZoneItalianLoading}
+              className="w-full bg-violet-600 hover:bg-violet-700 p-2 rounded text-sm font-semibold disabled:opacity-50"
+            >
+              {arenaZoneItalianLoading ? 'Importing...' : 'Import AZ'}
             </button>
           </div>
 
