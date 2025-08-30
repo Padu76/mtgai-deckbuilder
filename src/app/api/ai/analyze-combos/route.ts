@@ -229,7 +229,7 @@ async function getExistingCombos(supabase: any, colors: string[], format: string
     })
 
     // Converti format database in format UI
-    return filteredCombos.map(combo => ({
+    return filteredCombos.map((combo: any) => ({
       id: combo.id,
       cards: [], // Le combo del database non hanno carte associate, solo nomi
       category: inferCategoryFromCombo(combo),
