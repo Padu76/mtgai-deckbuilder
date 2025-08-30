@@ -78,6 +78,10 @@ export default function AdminDashboard() {
   const [syncMode, setSyncMode] = useState<'outdated' | 'all' | 'missing_images' | 'missing_italian'>('outdated')
   const [syncLogs, setSyncLogs] = useState<string[]>([])
 
+  // Stati per Commander Spellbook Import
+  const [commanderSpellbookResult, setCommanderSpellbookResult] = useState<any | null>(null)
+  const [commanderSpellbookLoading, setCommanderSpellbookLoading] = useState(false)
+
   useEffect(() => {
     if (isAuthenticated) {
       loadDatabaseStats()
@@ -263,6 +267,36 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleCommanderSpellbookImport = async () => {
+    setCommanderSpellbookLoading(true)
+    setCommanderSpellbookResult(null)
+    
+    try {
+      const response = await fetch('/api/admin/import-commander-spellbook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          adminKey,
+          maxCombos: 200,
+          minQuality: 4
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (data.success && data.stats) {
+        setCommanderSpellbookResult(data.stats)
+        loadDatabaseStats()
+      } else {
+        alert(`Commander Spellbook import fallito: ${data.message || 'Errore sconosciuto'}`)
+      }
+    } catch (error) {
+      alert(`Errore Commander Spellbook: ${error}`)
+    } finally {
+      setCommanderSpellbookLoading(false)
+    }
+  }
+
   const getSyncModeLabel = (mode: string) => {
     switch(mode) {
       case 'all': return 'Tutte le carte'
@@ -335,6 +369,15 @@ export default function AdminDashboard() {
               Scryfall sync completato: {scryfallSyncResult.stats?.cards_updated} carte aggiornate, 
               {scryfallSyncResult.stats?.cards_with_italian_names} con nomi italiani, 
               {scryfallSyncResult.stats?.cards_with_images} con immagini
+            </p>
+          </div>
+        )}
+
+        {commanderSpellbookResult && (
+          <div className="bg-yellow-900/30 border border-yellow-500 rounded-lg p-4 mb-6">
+            <p className="text-yellow-400">
+              Commander Spellbook import completato: {commanderSpellbookResult.imported} combo importate, 
+              {commanderSpellbookResult.high_quality} alta qualità, {commanderSpellbookResult.medium_quality} media qualità
             </p>
           </div>
         )}
@@ -527,24 +570,28 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {/* Utils */}
+          {/* Commander Spellbook Import */}
           <div className="bg-gray-800 rounded-lg p-6">
             <div className="flex items-center mb-4">
-              <div className="w-8 h-8 bg-gray-600 rounded flex items-center justify-center mr-3">
-                ⚙️
+              <div className="w-8 h-8 bg-yellow-600 rounded flex items-center justify-center mr-3">
+                📚
               </div>
               <div>
-                <h3 className="font-semibold">Utils</h3>
-                <p className="text-sm text-gray-400">System tools</p>
+                <h3 className="font-semibold">Commander Spellbook</h3>
+                <p className="text-sm text-gray-400">Database EDH combo</p>
               </div>
             </div>
             
             <div className="mb-4 text-sm">
-              <p>Maintenance e utilities varie.</p>
+              <p>Importa centinaia di combo da Commander Spellbook per Historic Brawl.</p>
             </div>
             
-            <button className="w-full bg-gray-600 hover:bg-gray-700 p-3 rounded font-semibold">
-              System Tools
+            <button
+              onClick={handleCommanderSpellbookImport}
+              disabled={commanderSpellbookLoading}
+              className="w-full bg-yellow-600 hover:bg-yellow-700 p-3 rounded font-semibold disabled:opacity-50"
+            >
+              {commanderSpellbookLoading ? 'Importing...' : 'Import Combos'}
             </button>
           </div>
         </div>
@@ -651,6 +698,39 @@ export default function AdminDashboard() {
                     {newSetsResult.cross_combos}
                   </div>
                   <div className="text-gray-400 text-sm">Combo cross</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Commander Spellbook Results */}
+          {commanderSpellbookResult && (
+            <div className="bg-gray-800 rounded-lg p-6">
+              <h3 className="font-semibold mb-4">Risultato Commander Spellbook</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-yellow-400">
+                    {commanderSpellbookResult.imported}
+                  </div>
+                  <div className="text-gray-400 text-sm">Combo importate</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-400">
+                    {commanderSpellbookResult.high_quality}
+                  </div>
+                  <div className="text-gray-400 text-sm">Alta qualità</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-blue-400">
+                    {commanderSpellbookResult.medium_quality}
+                  </div>
+                  <div className="text-gray-400 text-sm">Media qualità</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-gray-400">
+                    {commanderSpellbookResult.skipped}
+                  </div>
+                  <div className="text-gray-400 text-sm">Ignorate</div>
                 </div>
               </div>
             </div>
