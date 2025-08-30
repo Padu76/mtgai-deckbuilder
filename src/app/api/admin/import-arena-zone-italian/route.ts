@@ -410,7 +410,10 @@ function extractItalianFromTranslationsPage(html: string, englishName: string): 
     }
     
     // Fallback: cerca pattern tabella traduzioni
+    const escapedName = englishName.replace(/[.*+?^${}()|[\]\\]/g, '\\    // Fallback: cerca pattern tabella traduzioni
     const tablePattern = /<table[^>]*>.*?<tr[^>]*>.*?${englishName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}.*?<td[^>]*>([^<]+)/is
+    const tableMatch = html.match(tablePattern)')
+    const tablePattern = new RegExp(`<table[^>]*>.*?<tr[^>]*>.*?${escapedName}.*?<td[^>]*>([^<]+)`, 'is')
     const tableMatch = html.match(tablePattern)
     
     if (tableMatch && tableMatch[1] && tableMatch[1].trim() !== englishName) {
