@@ -2,7 +2,7 @@
 // API endpoint per scoprire combo da colori e archetipi
 
 import { NextRequest, NextResponse } from 'next/server'
-import { ComboDiscoveryEngine } from '@/lib/combo-discovery'
+import { ComboDiscoveryEngine } from '../../../../lib/combo-discovery'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
