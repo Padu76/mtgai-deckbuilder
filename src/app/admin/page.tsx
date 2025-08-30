@@ -1,4 +1,4 @@
-// src/app/admin/page.tsx - Admin dashboard ottimizzato con dettagli avanzati
+// src/app/admin/page.tsx - Admin dashboard ottimizzato con EDHREC Historic Brawl
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -59,17 +59,18 @@ interface ScryfallSyncResult {
   log?: string[]
 }
 
-interface HistoricBrawlImportResult {
+interface EDHRECHistoricImportResult {
   success: boolean
   message: string
   stats?: {
-    total_fetched: number
-    valid_combos: number
+    commanders_analyzed: number
+    total_combos_found: number
+    historic_legal_combos: number
     imported: number
     skipped: number
     errors: number
     color_breakdown: { [key: string]: number }
-    quality_breakdown: { [key: string]: number }
+    theme_breakdown: { [key: string]: number }
   }
   log?: string[]
   errors?: string[]
@@ -107,11 +108,12 @@ export default function AdminDashboard() {
   const [commanderSpellbookLoading, setCommanderSpellbookLoading] = useState(false)
   const [commanderMaxCombos, setCommanderMaxCombos] = useState(200)
 
-  // Stati per Historic Brawl Import - NUOVO
-  const [historicBrawlResult, setHistoricBrawlResult] = useState<HistoricBrawlImportResult | null>(null)
-  const [historicBrawlLoading, setHistoricBrawlLoading] = useState(false)
-  const [historicMaxCombos, setHistoricMaxCombos] = useState(100)
-  const [historicColorFilter, setHistoricColorFilter] = useState<string[]>([])
+  // Stati per EDHREC Historic Brawl Import - AGGIORNATO
+  const [edhrecHistoricResult, setEdhrecHistoricResult] = useState<EDHRECHistoricImportResult | null>(null)
+  const [edhrecHistoricLoading, setEdhrecHistoricLoading] = useState(false)
+  const [edhrecMaxCombos, setEdhrecMaxCombos] = useState(150)
+  const [edhrecColorFilter, setEdhrecColorFilter] = useState<string[]>([])
+  const [includeUnpopular, setIncludeUnpopular] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -370,35 +372,36 @@ export default function AdminDashboard() {
     }
   }
 
-  // NUOVO: Historic Brawl Import Handler
-  const handleHistoricBrawlImport = async () => {
-    setHistoricBrawlLoading(true)
-    setHistoricBrawlResult(null)
+  // AGGIORNATO: EDHREC Historic Brawl Import Handler
+  const handleEDHRECHistoricImport = async () => {
+    setEdhrecHistoricLoading(true)
+    setEdhrecHistoricResult(null)
     
     try {
-      const response = await fetch('/api/admin/import-cards-realm-historic', {
+      const response = await fetch('/api/admin/import-edhrec-historic', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           adminKey,
-          maxCombos: historicMaxCombos,
-          colorFilter: historicColorFilter.length > 0 ? historicColorFilter : null,
-          skipExisting: true
+          maxCombos: edhrecMaxCombos,
+          colorFilter: edhrecColorFilter.length > 0 ? edhrecColorFilter : null,
+          skipExisting: true,
+          includeUnpopular: includeUnpopular
         })
       })
       
       const data = await response.json()
       
       if (data.success && data.stats) {
-        setHistoricBrawlResult(data)
+        setEdhrecHistoricResult(data)
         loadDatabaseStats()
       } else {
-        alert(`Historic Brawl import fallito: ${data.message || 'Errore sconosciuto'}`)
+        alert(`EDHREC Historic Brawl import fallito: ${data.message || 'Errore sconosciuto'}`)
       }
     } catch (error) {
-      alert(`Errore Historic Brawl: ${error}`)
+      alert(`Errore EDHREC Historic Brawl: ${error}`)
     } finally {
-      setHistoricBrawlLoading(false)
+      setEdhrecHistoricLoading(false)
     }
   }
 
@@ -526,23 +529,31 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* NUOVO: Historic Brawl Results */}
-        {historicBrawlResult && historicBrawlResult.success && (
+        {/* AGGIORNATO: EDHREC Historic Brawl Results */}
+        {edhrecHistoricResult && edhrecHistoricResult.success && (
           <div className="bg-orange-900/30 border border-orange-500 rounded-lg p-4 mb-6">
             <div className="flex justify-between items-center mb-2">
-              <h4 className="text-orange-400 font-semibold">✓ Historic Brawl Import Completato</h4>
-              <span className="text-orange-300 text-sm">MTG Arena Specific</span>
+              <h4 className="text-orange-400 font-semibold">✓ EDHREC Historic Brawl Import Completato</h4>
+              <span className="text-orange-300 text-sm">Community Validated</span>
             </div>
             <div className="grid grid-cols-4 gap-4">
-              <div><span className="text-orange-200">Importate:</span> <strong>{historicBrawlResult.stats?.imported}</strong></div>
-              <div><span className="text-orange-200">Trovate:</span> <strong>{historicBrawlResult.stats?.total_fetched}</strong></div>
-              <div><span className="text-orange-200">Valide:</span> <strong>{historicBrawlResult.stats?.valid_combos}</strong></div>
-              <div><span className="text-orange-200">Errori:</span> <strong>{historicBrawlResult.stats?.errors}</strong></div>
+              <div><span className="text-orange-200">Importate:</span> <strong>{edhrecHistoricResult.stats?.imported}</strong></div>
+              <div><span className="text-orange-200">Commander Analizzati:</span> <strong>{edhrecHistoricResult.stats?.commanders_analyzed}</strong></div>
+              <div><span className="text-orange-200">Combo Trovate:</span> <strong>{edhrecHistoricResult.stats?.total_combos_found}</strong></div>
+              <div><span className="text-orange-200">Historic Legali:</span> <strong>{edhrecHistoricResult.stats?.historic_legal_combos}</strong></div>
             </div>
-            {historicBrawlResult.stats?.color_breakdown && (
+            {edhrecHistoricResult.stats?.theme_breakdown && (
               <div className="mt-3 pt-3 border-t border-orange-700">
+                <span className="text-orange-300 text-sm">Breakdown Temi: </span>
+                {Object.entries(edhrecHistoricResult.stats.theme_breakdown).slice(0, 5).map(([theme, count]) => (
+                  <span key={theme} className="text-orange-200 text-sm mr-3">{theme}: {count}</span>
+                ))}
+              </div>
+            )}
+            {edhrecHistoricResult.stats?.color_breakdown && (
+              <div className="mt-2">
                 <span className="text-orange-300 text-sm">Breakdown Colori: </span>
-                {Object.entries(historicBrawlResult.stats.color_breakdown).map(([color, count]) => (
+                {Object.entries(edhrecHistoricResult.stats.color_breakdown).slice(0, 5).map(([color, count]) => (
                   <span key={color} className="text-orange-200 text-sm mr-3">{color}: {count}</span>
                 ))}
               </div>
@@ -597,7 +608,7 @@ export default function AdminDashboard() {
                   <div key={source} className="flex justify-between items-center bg-gray-700 p-3 rounded">
                     <div>
                       <span className="font-medium capitalize">
-                        {source.replace(/_/g, ' ').replace('cards realm historic', 'Historic Brawl')}
+                        {source.replace(/_/g, ' ').replace('edhrec historic', 'EDHREC Historic')}
                       </span>
                       {databaseStats.recent_imports.find(r => r.source === source) && (
                         <div className="text-xs text-gray-400">
@@ -822,32 +833,32 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {/* NUOVO: Historic Brawl */}
+          {/* AGGIORNATO: EDHREC Historic Brawl */}
           <div className="bg-gray-800 rounded-lg p-4">
             <div className="flex items-center mb-3">
               <div className="w-6 h-6 bg-red-600 rounded flex items-center justify-center mr-2 text-xs">⚔️</div>
               <div>
                 <h3 className="font-semibold text-sm">Historic Brawl</h3>
-                <p className="text-xs text-gray-400">Arena specific</p>
+                <p className="text-xs text-gray-400">EDHREC validated</p>
               </div>
             </div>
-            <div className="mb-2">
+            <div className="mb-2 space-y-1">
               <input
                 type="number"
-                value={historicMaxCombos}
-                onChange={(e) => setHistoricMaxCombos(parseInt(e.target.value) || 100)}
+                value={edhrecMaxCombos}
+                onChange={(e) => setEdhrecMaxCombos(parseInt(e.target.value) || 150)}
                 min="25"
                 max="500"
                 step="25"
-                className="w-full bg-gray-700 text-white p-1 rounded text-xs mb-2"
-                disabled={historicBrawlLoading}
+                className="w-full bg-gray-700 text-white p-1 rounded text-xs"
+                disabled={edhrecHistoricLoading}
               />
               <select
                 multiple
-                value={historicColorFilter}
-                onChange={(e) => setHistoricColorFilter(Array.from(e.target.selectedOptions, option => option.value))}
-                className="w-full bg-gray-700 text-white p-1 rounded text-xs h-16"
-                disabled={historicBrawlLoading}
+                value={edhrecColorFilter}
+                onChange={(e) => setEdhrecColorFilter(Array.from(e.target.selectedOptions, option => option.value))}
+                className="w-full bg-gray-700 text-white p-1 rounded text-xs h-12"
+                disabled={edhrecHistoricLoading}
               >
                 <option value="">Tutti i colori</option>
                 <option value="W">Bianco</option>
@@ -856,13 +867,23 @@ export default function AdminDashboard() {
                 <option value="R">Rosso</option>
                 <option value="G">Verde</option>
               </select>
+              <label className="flex items-center text-xs">
+                <input
+                  type="checkbox"
+                  checked={includeUnpopular}
+                  onChange={(e) => setIncludeUnpopular(e.target.checked)}
+                  className="mr-1"
+                  disabled={edhrecHistoricLoading}
+                />
+                Includi combo impopolari
+              </label>
             </div>
             <button
-              onClick={handleHistoricBrawlImport}
-              disabled={historicBrawlLoading}
+              onClick={handleEDHRECHistoricImport}
+              disabled={edhrecHistoricLoading}
               className="w-full bg-red-600 hover:bg-red-700 p-2 rounded text-sm font-semibold disabled:opacity-50"
             >
-              {historicBrawlLoading ? 'Importing...' : 'Import HB'}
+              {edhrecHistoricLoading ? 'Importing...' : 'Import EDHREC'}
             </button>
           </div>
         </div>
