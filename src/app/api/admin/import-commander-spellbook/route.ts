@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY!
+const GOOGLE_SHEETS_API_KEY = process.env.GOOGLE_SHEETS_API_KEY!
 
 interface CommanderSpellbookCombo {
   commanderSpellbookId: string
@@ -32,7 +33,8 @@ interface ImportResult {
   errors?: string[]
 }
 
-const COMMANDER_SPELLBOOK_API = 'https://sheets.googleapis.com/v4/spreadsheets/1JJo8MzkpuhfvsaKVFVlOoNymscCt-Aw-1sob2IhpwXY/values/combos!A:Z?key=AIzaSyDzQ2zRt2HnTvq0Z5V7_7O2aaYYoV7B2b8'
+const COMMANDER_SPELLBOOK_SPREADSHEET_ID = '1JJo8MzkpuhfvsaKVFVlOoNymscCt-Aw-1sob2IhpwXY'
+const SPREADSHEET_RANGE = 'combos!A:Z'
 
 export async function POST(request: NextRequest): Promise<NextResponse<ImportResult>> {
   const log: string[] = []
@@ -117,33 +119,98 @@ export async function POST(request: NextRequest): Promise<NextResponse<ImportRes
 
 async function fetchCommanderSpellbookData(log: string[], errors: string[]): Promise<any[] | null> {
   try {
-    // Usa l'API wrapper npm per semplificare l'accesso
-    const response = await fetch('https://commanderspellbook.com/api/combos/', {
+    // Prima prova con l'API ufficiale
+    const apiResponse = await fetch('https://commanderspellbook.com/api/combos/', {
       headers: {
         'User-Agent': 'MTGArenaAI-DeckBuilder/1.0',
         'Accept': 'application/json'
       }
     })
     
-    if (!response.ok) {
-      throw new Error(`Commander Spellbook API error: ${response.status} ${response.statusText}`)
+    if (apiResponse.ok) {
+      const data = await apiResponse.json()
+      if (Array.isArray(data) && data.length > 0) {
+        log.push('Successfully fetched from Commander Spellbook API')
+        return data
+      }
     }
     
-    const data = await response.json()
+    log.push('API not available, trying Google Sheets fallback...')
     
-    if (!Array.isArray(data)) {
-      throw new Error('Invalid response format from Commander Spellbook API')
+    // Fallback: Google Sheets API
+    if (!GOOGLE_SHEETS_API_KEY) {
+      throw new Error('Google Sheets API key not configured')
     }
     
-    return data
+    const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${COMMANDER_SPELLBOOK_SPREADSHEET_ID}/values/${SPREADSHEET_RANGE}?key=${GOOGLE_SHEETS_API_KEY}`
+    
+    const sheetsResponse = await fetch(sheetsUrl)
+    
+    if (!sheetsResponse.ok) {
+      throw new Error(`Google Sheets API error: ${sheetsResponse.status} ${sheetsResponse.statusText}`)
+    }
+    
+    const sheetsData = await sheetsResponse.json()
+    
+    if (!sheetsData.values || !Array.isArray(sheetsData.values)) {
+      throw new Error('Invalid response format from Google Sheets')
+    }
+    
+    log.push('Successfully fetched from Google Sheets fallback')
+    return convertSheetsToComboFormat(sheetsData.values)
     
   } catch (error) {
     errors.push(`Error fetching from Commander Spellbook: ${(error as Error).message}`)
     
-    // Fallback: usa dati mock per testing se l'API non risponde
-    log.push('API not available, using fallback data for testing...')
+    // Fallback finale: dati mock per testing
+    log.push('All sources failed, using mock data for testing...')
     return getMockCommanderSpellbookData()
   }
+}
+
+function convertSheetsToComboFormat(sheetRows: string[][]): any[] {
+  if (sheetRows.length < 2) return []
+  
+  const headers = sheetRows[0]
+  const dataRows = sheetRows.slice(1)
+  
+  return dataRows.map((row, index) => {
+    const combo: any = { id: `sheet_${index + 1}` }
+    
+    headers.forEach((header, colIndex) => {
+      const value = row[colIndex] || ''
+      const normalizedHeader = header.toLowerCase().replace(/[^a-z]/g, '')
+      
+      switch (normalizedHeader) {
+        case 'cards':
+        case 'cardnames':
+          combo.cards = value.split(',').map(name => ({ name: name.trim() }))
+          break
+        case 'coloridentity':
+        case 'colors':
+          combo.colorIdentity = value
+          break
+        case 'steps':
+        case 'description':
+          combo.steps = value
+          break
+        case 'results':
+        case 'result':
+          combo.results = value
+          break
+        case 'prerequisites':
+        case 'setup':
+          combo.prerequisites = value
+          break
+        case 'permalink':
+        case 'link':
+          combo.permalink = value
+          break
+      }
+    })
+    
+    return combo
+  }).filter(combo => combo.cards && combo.cards.length > 0)
 }
 
 function parseCommanderSpellbookData(
@@ -373,6 +440,12 @@ export async function GET() {
         'maxCombos': 'Max combos to import (default: 1000)',
         'colorFilter': 'Optional array of colors to filter by'
       }
-    }
+    },
+    environment_variables_required: [
+      'NEXT_PUBLIC_SUPABASE_URL',
+      'SUPABASE_SERVICE_ROLE_KEY', 
+      'NEXT_PUBLIC_ADMIN_KEY',
+      'GOOGLE_SHEETS_API_KEY'
+    ]
   })
 }
