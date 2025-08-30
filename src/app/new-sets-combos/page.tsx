@@ -1,5 +1,5 @@
 // src/app/new-sets-combos/page.tsx
-// Pagina con simboli mana colorati e traduzioni combo integrate
+// Pagina con simboli mana colorati e traduzioni combo integrate + Filtro Colori
 
 'use client'
 import { useState, useEffect } from 'react'
@@ -115,6 +115,67 @@ function ManaSymbols({ colors, size = 'medium' }: { colors: string[], size?: 'sm
   )
 }
 
+// Componente per filtro colori
+function ColorFilter({ selectedColors, onColorToggle, onClearColors }: {
+  selectedColors: string[]
+  onColorToggle: (color: string) => void
+  onClearColors: () => void
+}) {
+  const colors = [
+    { code: 'W', name: 'Bianco' },
+    { code: 'U', name: 'Blu' },
+    { code: 'B', name: 'Nero' },
+    { code: 'R', name: 'Rosso' },
+    { code: 'G', name: 'Verde' },
+    { code: 'C', name: 'Incolore' }
+  ]
+
+  return (
+    <div className="bg-gray-800 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-gray-300">Filtra per Colori</h3>
+        {selectedColors.length > 0 && (
+          <button 
+            onClick={onClearColors}
+            className="text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            Pulisci
+          </button>
+        )}
+      </div>
+      
+      <div className="flex gap-2 justify-center">
+        {colors.map(color => (
+          <button
+            key={color.code}
+            onClick={() => onColorToggle(color.code)}
+            className={`relative transition-all duration-200 ${
+              selectedColors.includes(color.code)
+                ? 'transform scale-110 ring-2 ring-white ring-opacity-50'
+                : 'opacity-70 hover:opacity-100 hover:transform hover:scale-105'
+            }`}
+            title={`${selectedColors.includes(color.code) ? 'Rimuovi' : 'Aggiungi'} ${color.name}`}
+          >
+            <ManaSymbol color={color.code} size="medium" />
+            {selectedColors.includes(color.code) && (
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-800" />
+            )}
+          </button>
+        ))}
+      </div>
+      
+      <div className="mt-2 text-center">
+        <p className="text-xs text-gray-400">
+          {selectedColors.length === 0 
+            ? 'Seleziona colori per filtrare le combo'
+            : `Mostra combo ${selectedColors.join('')} (${selectedColors.length} color${selectedColors.length === 1 ? 'e' : 'i'})`
+          }
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export default function NewSetsCombosPage() {
   const [recentSets, setRecentSets] = useState<RecentSet[]>([])
   const [selectedExpansions, setSelectedExpansions] = useState<number>(3)
@@ -123,6 +184,7 @@ export default function NewSetsCombosPage() {
   const [analysisResult, setAnalysisResult] = useState<NewSetsResult | null>(null)
   const [discoveredCombos, setDiscoveredCombos] = useState<ComboResult[]>([])
   const [filterType, setFilterType] = useState<'all' | 'internal' | 'cross'>('all')
+  const [selectedColors, setSelectedColors] = useState<string[]>([])
   const [showLogs, setShowLogs] = useState(false)
   const [addedCombos, setAddedCombos] = useState<Set<string>>(new Set())
 
@@ -262,11 +324,59 @@ export default function NewSetsCombosPage() {
     }, 3000)
   }
 
+  const handleColorToggle = (color: string) => {
+    setSelectedColors(prev => 
+      prev.includes(color) 
+        ? prev.filter(c => c !== color)
+        : [...prev, color]
+    )
+  }
+
+  const handleClearColors = () => {
+    setSelectedColors([])
+  }
+
+  // Funzione per verificare se una combo corrisponde ai colori selezionati
+  const matchesColorFilter = (combo: ComboResult) => {
+    if (selectedColors.length === 0) return true
+    
+    const comboColors = combo.color_identity || []
+    const hasColorlessSelected = selectedColors.includes('C')
+    const coloredColorsSelected = selectedColors.filter(c => c !== 'C')
+    
+    // Se è selezionato solo incolore
+    if (hasColorlessSelected && coloredColorsSelected.length === 0) {
+      return comboColors.length === 0
+    }
+    
+    // Se sono selezionati colori normali + incolore
+    if (hasColorlessSelected && coloredColorsSelected.length > 0) {
+      // Mostra combo che hanno TUTTI i colori selezionati (escluso C) OPPURE combo incolori
+      return comboColors.length === 0 || coloredColorsSelected.every(selectedColor => 
+        comboColors.includes(selectedColor)
+      )
+    }
+    
+    // Se sono selezionati solo colori normali (no incolore)
+    // La combo deve contenere TUTTI i colori selezionati (ma può averne altri)
+    return coloredColorsSelected.every(selectedColor => 
+      comboColors.includes(selectedColor)
+    )
+  }
+
   const filteredCombos = discoveredCombos.filter(combo => {
-    if (filterType === 'all') return true
-    if (filterType === 'internal') return combo.source === 'new_set_analysis' && !combo.name.includes('existing')
-    if (filterType === 'cross') return combo.name.includes('existing') || combo.steps.includes('cross')
-    return true
+    // Filtro per tipo
+    const typeMatch = (() => {
+      if (filterType === 'all') return true
+      if (filterType === 'internal') return combo.source === 'new_set_analysis' && !combo.name.includes('existing')
+      if (filterType === 'cross') return combo.name.includes('existing') || combo.steps.includes('cross')
+      return true
+    })()
+    
+    // Filtro per colore
+    const colorMatch = matchesColorFilter(combo)
+    
+    return typeMatch && colorMatch
   })
 
   const getColorBadgeClass = (colors: string[]) => {
@@ -491,45 +601,59 @@ export default function NewSetsCombosPage() {
         )}
 
         {/* Combo Filters */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-2xl font-bold mb-2">Combo Scoperte</h2>
-            <p className="text-gray-400">
-              {filteredCombos.length} combo trovate dalle nuove espansioni
-            </p>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+          <div className="lg:col-span-3">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-2xl font-bold mb-2">Combo Scoperte</h2>
+                <p className="text-gray-400">
+                  {filteredCombos.length} combo trovate 
+                  {selectedColors.length > 0 && ` con colori ${selectedColors.join('')}`}
+                  {discoveredCombos.length !== filteredCombos.length && ` (${discoveredCombos.length} totali)`}
+                </p>
+              </div>
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setFilterType('all')}
+                  className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                    filterType === 'all' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  Tutte ({discoveredCombos.filter(c => matchesColorFilter(c)).length})
+                </button>
+                <button
+                  onClick={() => setFilterType('internal')}
+                  className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                    filterType === 'internal' 
+                      ? 'bg-yellow-600 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  Interne
+                </button>
+                <button
+                  onClick={() => setFilterType('cross')}
+                  className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                    filterType === 'cross' 
+                      ? 'bg-cyan-600 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  Cross-Set
+                </button>
+              </div>
+            </div>
           </div>
           
-          <div className="flex gap-2">
-            <button
-              onClick={() => setFilterType('all')}
-              className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                filterType === 'all' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              Tutte ({discoveredCombos.length})
-            </button>
-            <button
-              onClick={() => setFilterType('internal')}
-              className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                filterType === 'internal' 
-                  ? 'bg-yellow-600 text-white' 
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              Interne
-            </button>
-            <button
-              onClick={() => setFilterType('cross')}
-              className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                filterType === 'cross' 
-                  ? 'bg-cyan-600 text-white' 
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              Cross-Set
-            </button>
+          <div>
+            <ColorFilter 
+              selectedColors={selectedColors}
+              onColorToggle={handleColorToggle}
+              onClearColors={handleClearColors}
+            />
           </div>
         </div>
 
@@ -541,7 +665,9 @@ export default function NewSetsCombosPage() {
             <p className="text-gray-400 mb-6">
               {discoveredCombos.length === 0 
                 ? 'Esegui un\'analisi per scoprire nuove combo dalle espansioni recenti.'
-                : `Nessuna combo ${filterType} trovata. Prova un filtro diverso.`
+                : selectedColors.length > 0 
+                  ? `Nessuna combo ${filterType} trovata per i colori ${selectedColors.join('')}. Prova colori diversi.`
+                  : `Nessuna combo ${filterType} trovata. Prova un filtro diverso.`
               }
             </p>
             {discoveredCombos.length === 0 && (
