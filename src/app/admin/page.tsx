@@ -1,4 +1,4 @@
-// src/app/admin/page.tsx - Admin dashboard ottimizzato con EDHREC Historic Brawl
+// src/app/admin/page.tsx - Admin dashboard con Gatherer Italian Import
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -76,6 +76,21 @@ interface EDHRECHistoricImportResult {
   errors?: string[]
 }
 
+interface GathererItalianImportResult {
+  success: boolean
+  message: string
+  stats?: {
+    cards_processed: number
+    cards_with_existing_italian: number
+    new_italian_translations: number
+    gatherer_queries: number
+    errors: number
+    coverage_improvement: string
+  }
+  log?: string[]
+  errors?: string[]
+}
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -108,12 +123,18 @@ export default function AdminDashboard() {
   const [commanderSpellbookLoading, setCommanderSpellbookLoading] = useState(false)
   const [commanderMaxCombos, setCommanderMaxCombos] = useState(200)
 
-  // Stati per EDHREC Historic Brawl Import - AGGIORNATO
+  // Stati per EDHREC Historic Brawl Import
   const [edhrecHistoricResult, setEdhrecHistoricResult] = useState<EDHRECHistoricImportResult | null>(null)
   const [edhrecHistoricLoading, setEdhrecHistoricLoading] = useState(false)
   const [edhrecMaxCombos, setEdhrecMaxCombos] = useState(150)
   const [edhrecColorFilter, setEdhrecColorFilter] = useState<string[]>([])
   const [includeUnpopular, setIncludeUnpopular] = useState(false)
+
+  // Stati per Gatherer Italian Import - NUOVO
+  const [gathererItalianResult, setGathererItalianResult] = useState<GathererItalianImportResult | null>(null)
+  const [gathererItalianLoading, setGathererItalianLoading] = useState(false)
+  const [gathererMaxCards, setGathererMaxCards] = useState(200)
+  const [onlyArenaCards, setOnlyArenaCards] = useState(true)
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -372,7 +393,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // AGGIORNATO: EDHREC Historic Brawl Import Handler
   const handleEDHRECHistoricImport = async () => {
     setEdhrecHistoricLoading(true)
     setEdhrecHistoricResult(null)
@@ -402,6 +422,39 @@ export default function AdminDashboard() {
       alert(`Errore EDHREC Historic Brawl: ${error}`)
     } finally {
       setEdhrecHistoricLoading(false)
+    }
+  }
+
+  // NUOVO: Gatherer Italian Import Handler
+  const handleGathererItalianImport = async () => {
+    setGathererItalianLoading(true)
+    setGathererItalianResult(null)
+    
+    try {
+      const response = await fetch('/api/admin/import-gatherer-italian', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          adminKey,
+          maxCards: gathererMaxCards,
+          skipExisting: true,
+          onlyPopularCards: onlyArenaCards
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (data.success && data.stats) {
+        setGathererItalianResult(data)
+        loadDatabaseStats()
+        loadScryfallStats() // Refresh per vedere il miglioramento coverage
+      } else {
+        alert(`Gatherer Italian import fallito: ${data.message || 'Errore sconosciuto'}`)
+      }
+    } catch (error) {
+      alert(`Errore Gatherer Italian: ${error}`)
+    } finally {
+      setGathererItalianLoading(false)
     }
   }
 
@@ -529,7 +582,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* AGGIORNATO: EDHREC Historic Brawl Results */}
         {edhrecHistoricResult && edhrecHistoricResult.success && (
           <div className="bg-orange-900/30 border border-orange-500 rounded-lg p-4 mb-6">
             <div className="flex justify-between items-center mb-2">
@@ -550,14 +602,22 @@ export default function AdminDashboard() {
                 ))}
               </div>
             )}
-            {edhrecHistoricResult.stats?.color_breakdown && (
-              <div className="mt-2">
-                <span className="text-orange-300 text-sm">Breakdown Colori: </span>
-                {Object.entries(edhrecHistoricResult.stats.color_breakdown).slice(0, 5).map(([color, count]) => (
-                  <span key={color} className="text-orange-200 text-sm mr-3">{color}: {count}</span>
-                ))}
-              </div>
-            )}
+          </div>
+        )}
+
+        {/* NUOVO: Gatherer Italian Results */}
+        {gathererItalianResult && gathererItalianResult.success && (
+          <div className="bg-emerald-900/30 border border-emerald-500 rounded-lg p-4 mb-6">
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="text-emerald-400 font-semibold">✓ Gatherer Italian Import Completato</h4>
+              <span className="text-emerald-300 text-sm">Wizards Official</span>
+            </div>
+            <div className="grid grid-cols-4 gap-4">
+              <div><span className="text-emerald-200">Processate:</span> <strong>{gathererItalianResult.stats?.cards_processed}</strong></div>
+              <div><span className="text-emerald-200">Trovate IT:</span> <strong>{gathererItalianResult.stats?.new_italian_translations}</strong></div>
+              <div><span className="text-emerald-200">Query Gatherer:</span> <strong>{gathererItalianResult.stats?.gatherer_queries}</strong></div>
+              <div><span className="text-emerald-200">Miglioramento:</span> <strong>{gathererItalianResult.stats?.coverage_improvement}</strong></div>
+            </div>
           </div>
         )}
 
@@ -690,8 +750,8 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Enhanced Action Buttons - Updated Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
+        {/* Enhanced Action Buttons - Updated with Gatherer */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
           
           {/* Scryfall Sync */}
           <div className="bg-gray-800 rounded-lg p-4">
@@ -731,6 +791,46 @@ export default function AdminDashboard() {
             </button>
           </div>
 
+          {/* NUOVO: Gatherer Italian */}
+          <div className="bg-gray-800 rounded-lg p-4">
+            <div className="flex items-center mb-3">
+              <div className="w-6 h-6 bg-emerald-600 rounded flex items-center justify-center mr-2 text-xs">🇮🇹</div>
+              <div>
+                <h3 className="font-semibold text-sm">Gatherer IT</h3>
+                <p className="text-xs text-gray-400">Wizards official</p>
+              </div>
+            </div>
+            <div className="mb-2 space-y-1">
+              <input
+                type="number"
+                value={gathererMaxCards}
+                onChange={(e) => setGathererMaxCards(parseInt(e.target.value) || 200)}
+                min="50"
+                max="1000"
+                step="50"
+                className="w-full bg-gray-700 text-white p-1 rounded text-xs"
+                disabled={gathererItalianLoading}
+              />
+              <label className="flex items-center text-xs">
+                <input
+                  type="checkbox"
+                  checked={onlyArenaCards}
+                  onChange={(e) => setOnlyArenaCards(e.target.checked)}
+                  className="mr-1"
+                  disabled={gathererItalianLoading}
+                />
+                Solo carte Arena
+              </label>
+            </div>
+            <button
+              onClick={handleGathererItalianImport}
+              disabled={gathererItalianLoading}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 p-2 rounded text-sm font-semibold disabled:opacity-50"
+            >
+              {gathererItalianLoading ? 'Importing...' : 'Import IT'}
+            </button>
+          </div>
+
           {/* Sync Combo */}
           <div className="bg-gray-800 rounded-lg p-4">
             <div className="flex items-center mb-3">
@@ -765,7 +865,7 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {/* Scryfall */}
+          {/* Scryfall AI */}
           <div className="bg-gray-800 rounded-lg p-4">
             <div className="flex items-center mb-3">
               <div className="w-6 h-6 bg-indigo-600 rounded flex items-center justify-center mr-2 text-xs">🔍</div>
@@ -833,7 +933,7 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {/* AGGIORNATO: EDHREC Historic Brawl */}
+          {/* EDHREC Historic Brawl */}
           <div className="bg-gray-800 rounded-lg p-4">
             <div className="flex items-center mb-3">
               <div className="w-6 h-6 bg-red-600 rounded flex items-center justify-center mr-2 text-xs">⚔️</div>
